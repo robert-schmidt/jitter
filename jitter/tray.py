@@ -4,7 +4,7 @@ import threading
 import pystray
 from pystray import MenuItem
 
-from jitter import icons, heartbeat, idle
+from jitter import icons, heartbeat, idle, dialogs
 
 _refresh_timer: threading.Timer | None = None
 
@@ -28,8 +28,14 @@ def _toggle(icon: pystray.Icon, _item: MenuItem):
         icon.icon = icons.active_icon()
 
 
+def _about(icon: pystray.Icon, _item: MenuItem):
+    dialogs.show_about()
+
+
 def _quit(icon: pystray.Icon, _item: MenuItem):
     global _refresh_timer
+    if not dialogs.confirm_quit():
+        return
     heartbeat.stop()
     if _refresh_timer is not None:
         _refresh_timer.cancel()
@@ -94,6 +100,8 @@ def run():
                 lambda _: "Pause" if heartbeat.is_running() else "Resume",
                 _toggle,
             ),
+            MenuItem("About", _about),
+            pystray.Menu.SEPARATOR,
             MenuItem("Quit", _quit),
         ),
     )
