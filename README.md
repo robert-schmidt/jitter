@@ -23,16 +23,20 @@ Amphetamine is a great app, but it stopped working on my Mac one day and I have 
 
 ## How It Works
 
-- Every **3 minutes** (configurable), Jitter uses a triple approach to reset all idle detectors:
-  1. **F15 keypress** — an invisible key with no side effects
-  2. **Mouse nudge** — moves the cursor 1 pixel right then back. This registers as a Quartz-level event, which is what Teams actually checks via `CGEventSource`
-  3. **`caffeinate -u`** (macOS) — resets IOKit HIDIdleTime at the system level
-- After **60 minutes** of no real keyboard input (configurable), Jitter inserts a **10-minute skip** (configurable) before the next pulse to look more like natural human activity. After the skip, the idle counter resets and the cycle repeats.
-- **Schedule support** — set active hours (default 09:00–18:00, weekdays) so Jitter only runs during work time. Outside the schedule, it sleeps and the icon turns gray.
-- **Launch at login** — optional setting to start Jitter automatically (default: off).
+- Every **2 minutes** (configurable), Jitter fires 4 redundant methods to reset all idle detectors:
+  1. **`cliclick`** (if installed) — native C binary, most reliable. Simulates mouse moves + shift key as a separate process. Install with `brew install cliclick`.
+  2. **`osascript` + System Events** — sends keystrokes via macOS System Events, which has its own Accessibility context. Works even if the app's own permissions are limited.
+  3. **Quartz `CGEvent`** — direct mouse movement (randomized 5-20px in multiple directions) + shift key at the HID event tap level. This is the API Teams checks via `CGEventSource`.
+  4. **`pynput` F15** — invisible keypress as a final fallback.
+  5. **`caffeinate -u`** — prevents system sleep for the pulse interval.
+- Mouse movements are **randomized** in direction and distance to look natural — Teams ignores tiny 1px nudges.
+- After **60 minutes** of no real keyboard input (configurable), Jitter inserts a **10-minute skip** (configurable) before the next pulse to mimic natural human activity. After the skip, the idle counter resets and the cycle repeats.
+- **Schedule support** — set active hours and days so Jitter only runs during work time (disabled by default). Outside the schedule, it sleeps and the icon turns gray.
+- **Launch at login** — toggle from the tray menu (default: off).
 - Everything runs in the **system tray** — no windows, no dock icon, no distractions.
+- **Debug log** at `~/.jitter/debug.log` — every pulse is logged with verification of whether events actually reset the system idle timer.
 
-> **Tip:** Pause Jitter while you're actively working — the mouse nudge can interfere with precise cursor work (design tools, spreadsheets, etc.). Use the tray menu to quickly pause and resume. When paused, the system behaves completely normally.
+> **Tip:** Pause Jitter while you're actively working — the mouse movement can interfere with precise cursor work (design tools, spreadsheets, etc.). Use the tray menu to quickly pause and resume.
 
 - **Note on screensavers:** While actively pulsing, Jitter will prevent display sleep and screensaver activation. Outside the schedule or when paused, the system behaves normally.
 
@@ -52,7 +56,7 @@ Click the tray icon for **Pause/Resume**, **Settings**, **About** (with GitHub l
 Open **Settings** from the tray menu to configure:
 
 - **Schedule** — enable/disable, start and end time, active days of the week
-- **Pulse interval** — how often to send F15 (default: 3 minutes)
+- **Pulse interval** — how often to send activity pulses (default: 2 minutes)
 - **AFK threshold** — how long without real input before triggering a skip (default: 60 minutes)
 - **AFK skip duration** — how long to wait during a skip (default: 10 minutes)
 
