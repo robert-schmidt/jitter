@@ -56,7 +56,8 @@ def _simulate_macos():
     except OSError as e:
         _log.debug("osascript: FAILED - %s", e)
 
-    # SECONDARY: Quartz CGEvent
+    # SECONDARY: Quartz CGEvent — realistic multi-direction mouse movement
+    # Teams needs 2-3 moves in different directions to switch from Away
     try:
         from Quartz import (
             CGEventCreateMouseEvent, CGEventCreateKeyboardEvent,
@@ -65,14 +66,28 @@ def _simulate_macos():
         )
         event = CGEventCreate(None)
         pos = CGEventGetLocation(event)
+        x, y = pos.x, pos.y
+
+        # Move right
         CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-            None, kCGEventMouseMoved, (pos.x + 1, pos.y), 0))
+            None, kCGEventMouseMoved, (x + 3, y), 0))
         time.sleep(0.05)
+        # Move down
         CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-            None, kCGEventMouseMoved, (pos.x, pos.y), 0))
+            None, kCGEventMouseMoved, (x + 3, y + 3), 0))
+        time.sleep(0.05)
+        # Move left
+        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
+            None, kCGEventMouseMoved, (x - 2, y + 3), 0))
+        time.sleep(0.05)
+        # Move back to original
+        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
+            None, kCGEventMouseMoved, (x, y), 0))
+
+        # Shift key
         CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, True))
         CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, False))
-        _log.debug("CGEvent: mouse nudge + shift at (%.0f, %.0f)", pos.x, pos.y)
+        _log.debug("CGEvent: multi-move + shift at (%.0f, %.0f)", x, y)
     except Exception as e:
         _log.debug("CGEvent: FAILED - %s", e)
 
