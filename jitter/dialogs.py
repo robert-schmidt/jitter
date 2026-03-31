@@ -58,12 +58,13 @@ def _tk_confirm_quit() -> bool:
 
 def show_about():
     if platform.system() == "Darwin":
-        # AppleScript needs literal \n for newlines inside quoted strings
         osa_text = ABOUT_TEXT.replace('"', '\\"').replace("\n", "\\n")
-        _osascript(
+        result = _osascript(
             f'display dialog "{osa_text}" with title "About Jitter" '
-            'buttons {"OK"} default button "OK"'
+            'buttons {"GitHub", "OK"} default button "OK"'
         )
+        if "GitHub" in result:
+            subprocess.Popen(["open", REPO])
     else:
         _tk_about()
 
