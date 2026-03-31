@@ -6,16 +6,23 @@ import subprocess
 VERSION = "1.0.0"
 REPO = "https://github.com/robert-schmidt/jitter"
 
-ABOUT_TEXT = (
-    f"Jitter v{VERSION}\\n\\n"
-    "A tiny system tray app that keeps Microsoft Teams "
-    "(and other apps) from marking you as \\"Away.\\"\\n\\n"
-    "Sends a silent F15 keypress every 3 minutes. "
-    "After 60 minutes of no real input, inserts a "
-    "10-minute skip to mimic natural activity.\\n\\n"
-    "No network. No telemetry. No data collection.\\n"
-    f"Just a ghost key and peace of mind.\\n\\n{REPO}"
-)
+ABOUT_LINES = [
+    f"Jitter v{VERSION}",
+    "",
+    "A tiny system tray app that keeps Microsoft Teams",
+    '(and other apps) from marking you as "Away."',
+    "",
+    "Sends a silent F15 keypress every 3 minutes.",
+    "After 60 minutes of no real input, inserts a",
+    "10-minute skip to mimic natural activity.",
+    "",
+    "No network. No telemetry. No data collection.",
+    "Just a ghost key and peace of mind.",
+    "",
+    REPO,
+]
+
+ABOUT_TEXT = "\n".join(ABOUT_LINES)
 
 
 def _osascript(script: str) -> str:
@@ -31,8 +38,7 @@ def _tk_about():
     win = tk.Tk()
     win.title("About Jitter")
     win.resizable(False, False)
-    text = ABOUT_TEXT.replace("\\n", "\n").replace('\\"', '"')
-    tk.Label(win, text=text, justify="center", padx=20, pady=15).pack(expand=True, fill="both")
+    tk.Label(win, text=ABOUT_TEXT, justify="center", padx=20, pady=15).pack(expand=True, fill="both")
     tk.Button(win, text="OK", width=10, command=win.destroy).pack(pady=(0, 15))
     win.mainloop()
 
@@ -52,9 +58,11 @@ def _tk_confirm_quit() -> bool:
 
 def show_about():
     if platform.system() == "Darwin":
+        # AppleScript needs literal \n for newlines inside quoted strings
+        osa_text = ABOUT_TEXT.replace('"', '\\"').replace("\n", "\\n")
         _osascript(
-            f'display dialog "{ABOUT_TEXT}" with title "About Jitter" '
-            'buttons {{"OK"}} default button "OK"'
+            f'display dialog "{osa_text}" with title "About Jitter" '
+            'buttons {"OK"} default button "OK"'
         )
     else:
         _tk_about()
@@ -67,10 +75,11 @@ def confirm_quit() -> bool:
                 'display dialog "Are you sure you want to quit Jitter?\\n\\n'
                 'Teams will be able to detect idle status." '
                 'with title "Quit Jitter" '
-                'buttons {"Cancel", "Quit"} default button "Cancel" cancel button "Cancel"'
+                'buttons {"Cancel", "Quit"} default button "Cancel" '
+                'cancel button "Cancel"'
             )
             return "Quit" in result
-        except subprocess.TimeoutExpired:
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
             return False
     else:
         return _tk_confirm_quit()
