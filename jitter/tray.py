@@ -9,14 +9,12 @@ from jitter import icons, heartbeat, idle, dialogs
 _refresh_timer: threading.Timer | None = None
 
 
-def _format_idle() -> str:
-    secs = int(idle.idle_seconds())
-    if secs < 60:
-        return f"{secs}s"
-    mins = secs // 60
-    if mins < 60:
-        return f"{mins}m"
-    return f"{mins // 60}h {mins % 60}m"
+def _format_countdown() -> str:
+    secs = heartbeat.seconds_until_next()
+    m, s = divmod(secs, 60)
+    if m > 0:
+        return f"{m}m {s:02d}s"
+    return f"{s}s"
 
 
 def _toggle(icon: pystray.Icon, _item: MenuItem):
@@ -47,8 +45,8 @@ def _status_text(_item: MenuItem) -> str:
     if not heartbeat.is_running():
         return "○ Paused"
     if heartbeat.is_skipping():
-        return f"⏸ AFK skip (idle {_format_idle()})"
-    return f"● Active (idle {_format_idle()})"
+        return f"⏸ AFK skip — next pulse in {_format_countdown()}"
+    return f"● Active — next pulse in {_format_countdown()}"
 
 
 # Track last icon state to avoid redundant reassignment

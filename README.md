@@ -27,15 +27,15 @@ Jitter is a small, peaceful act of resistance. It presses a key that does nothin
 
 | Icon | State | Meaning |
 |------|-------|---------|
-| 🟢 | Active | Sending F15 every 3 min |
-| 🟡 | AFK Skip | Waiting 10 min (idle >60 min) |
+| 🟢 | Active | Sending F15 every 3 min — shows countdown to next pulse |
+| 🟡 | AFK Skip | Waiting 10 min (idle >60 min) — shows countdown to next pulse |
 | ⚪ | Paused | Manually paused |
 
-Click the tray icon for **Pause/Resume** and **Quit**.
+Click the tray icon for **Pause/Resume**, **About**, and **Quit** (with confirmation).
 
 ## Install & Run
 
-Requires Python 3.11+.
+Requires Python 3.11+ and Git.
 
 ```bash
 git clone https://github.com/robert-schmidt/jitter.git
@@ -43,6 +43,41 @@ cd jitter
 pip install -r requirements.txt
 python -m jitter.main
 ```
+
+### One-liner (macOS)
+
+Clone, build, and install to Applications in one shot:
+
+```bash
+git clone https://github.com/robert-schmidt/jitter.git /tmp/jitter && cd /tmp/jitter && pip install -r requirements.txt && make build-mac && cp -r dist/Jitter.app /Applications/ && open /Applications/Jitter.app
+```
+
+## Platform Setup
+
+### macOS
+
+Jitter requires two system permissions to function. On first launch, the app will automatically trigger the macOS permission prompt and show a guidance dialog explaining what's needed.
+
+You must grant **both** of the following in **System Settings → Privacy & Security**:
+
+1. **Accessibility** — required for simulating the F15 keypress (`pynput` keyboard controller)
+2. **Input Monitoring** — required for detecting real keyboard activity to track idle time (`pynput` keyboard listener)
+
+To grant permissions:
+1. Open **System Settings → Privacy & Security → Accessibility**
+2. Click the **+** button, navigate to `Jitter.app` (or your terminal app if running from source), and add it
+3. Repeat for **Privacy & Security → Input Monitoring**
+4. Relaunch Jitter
+
+> **Note:** If running from source (not the `.app` bundle), you need to grant these permissions to your **terminal app** (Terminal, iTerm2, etc.) instead.
+
+> **Tested on:** macOS Tahoe 26.3.1 (a) (25D771280a)
+
+### Windows
+
+No special permissions are required. Jitter works out of the box on Windows.
+
+> **Note:** Windows builds have not been tested yet. If you run into issues, please [open an issue](https://github.com/robert-schmidt/jitter/issues).
 
 ## Build Standalone Binaries
 
@@ -52,9 +87,7 @@ python -m jitter.main
 make build-mac
 ```
 
-Output: `dist/Jitter.app`
-
-On first launch, macOS will ask for **Accessibility** and **Input Monitoring** permissions (System Settings → Privacy & Security). This is required for simulating and monitoring keypresses.
+Output: `dist/Jitter.app` — move to Applications or run directly.
 
 ### Windows (.exe)
 
@@ -62,32 +95,32 @@ On first launch, macOS will ask for **Accessibility** and **Input Monitoring** p
 make build-win
 ```
 
-Output: `dist/Jitter.exe`
-
-No special permissions needed on Windows.
+Output: `dist/Jitter.exe` — run directly or place anywhere convenient.
 
 ### Pre-built Binaries
 
-Check the [Releases](https://github.com/robert-schmidt/jitter/releases) page for ready-to-run builds for macOS (Apple Silicon) and Windows.
+Check the [Releases](https://github.com/robert-schmidt/jitter/releases) page for ready-to-run builds.
 
 ## Project Structure
 
 ```
 jitter/
 ├── jitter/
-│   ├── main.py        — entry point
-│   ├── tray.py        — system tray setup and menu
-│   ├── heartbeat.py   — F15 timer loop with AFK skip logic
-│   ├── idle.py        — monitors real keyboard input
-│   └── icons.py       — generates tray icons (green/amber/gray circles)
-├── Makefile           — build targets for macOS and Windows
+│   ├── main.py          — entry point, permission check
+│   ├── tray.py          — system tray setup and menu
+│   ├── heartbeat.py     — F15 timer loop with AFK skip logic
+│   ├── idle.py          — monitors real keyboard input
+│   ├── icons.py         — generates tray icons (green/amber/gray circles)
+│   ├── dialogs.py       — About window and quit confirmation
+│   └── permissions.py   — macOS permission checks and prompts
+├── Makefile             — build targets for macOS and Windows
 ├── requirements.txt
 └── README.md
 ```
 
 ## About
 
-Jitter was built out of frustration with workplace tools that equate "online" with "working." It's less than 200 lines of Python, has no dependencies beyond the tray and input libraries, needs no config files, and does exactly one thing well.
+Jitter was built out of frustration with workplace tools that equate "online" with "working." It's about 200 lines of Python, has no dependencies beyond the tray and input libraries, needs no config files, and does exactly one thing well.
 
 It doesn't touch your network, doesn't phone home, doesn't collect data. It lives in your menu bar, presses a ghost key, and minds its own business — the way your employer should.
 
