@@ -4,7 +4,7 @@ import threading
 import pystray
 from pystray import MenuItem
 
-from jitter import icons, heartbeat, idle, dialogs
+from jitter import icons, heartbeat, idle, dialogs, config, settings_ui
 
 _refresh_timer: threading.Timer | None = None
 
@@ -17,6 +17,21 @@ def _format_countdown() -> str:
     return f"{s}s"
 
 
+def _schedule_label() -> str:
+    cfg = config.load()
+    if not cfg["schedule_enabled"]:
+        return "Schedule: off"
+    days = cfg["schedule_days"]
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    if days == [0, 1, 2, 3, 4]:
+        d = "weekdays"
+    elif days == [0, 1, 2, 3, 4, 5, 6]:
+        d = "every day"
+    else:
+        d = ", ".join(day_names[i] for i in days)
+    return f"Schedule: {cfg['schedule_start']}–{cfg['schedule_end']} ({d})"
+
+
 def _toggle(icon: pystray.Icon, _item: MenuItem):
     if heartbeat.is_running():
         heartbeat.stop()
@@ -24,6 +39,10 @@ def _toggle(icon: pystray.Icon, _item: MenuItem):
     else:
         heartbeat.start()
         icon.icon = icons.active_icon()
+
+
+def _open_settings(icon: pystray.Icon, _item: MenuItem):
+    settings_ui.show()
 
 
 def _about(icon: pystray.Icon, _item: MenuItem):
@@ -44,6 +63,8 @@ def _quit(icon: pystray.Icon, _item: MenuItem):
 def _status_text(_item: MenuItem) -> str:
     if not heartbeat.is_running():
         return "○ Paused"
+    if heartbeat.is_outside_schedule():
+        return "◑ Outside schedule — sleeping"
     if heartbeat.is_skipping():
         return f"⏸ AFK skip — next pulse in {_format_countdown()}"
     return f"● Active — next pulse in {_format_countdown()}"
@@ -56,6 +77,8 @@ _last_state: str | None = None
 def _update_icon(icon: pystray.Icon):
     global _last_state
     if not heartbeat.is_running():
+        state = "paused"
+    elif heartbeat.is_outside_schedule():
         state = "paused"
     elif heartbeat.is_skipping():
         state = "skipping"
@@ -93,11 +116,13 @@ def run():
         title="Jitter",
         menu=pystray.Menu(
             MenuItem(_status_text, None, enabled=False),
+            MenuItem(lambda _: _schedule_label(), None, enabled=False),
             pystray.Menu.SEPARATOR,
             MenuItem(
                 lambda _: "Pause" if heartbeat.is_running() else "Resume",
                 _toggle,
             ),
+            MenuItem("Settings", _open_settings),
             MenuItem("About", _about),
             pystray.Menu.SEPARATOR,
             MenuItem("Quit", _quit),
