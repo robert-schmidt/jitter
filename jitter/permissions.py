@@ -1,7 +1,7 @@
 """Check and request macOS permissions. No-op on other platforms."""
 
 import platform
-import sys
+import subprocess
 
 
 def check_accessibility() -> bool:
@@ -30,29 +30,19 @@ def check_all() -> bool:
     trusted = check_accessibility()
 
     if not trusted:
-        # Show a guidance dialog since the system prompt can be easy to miss
         try:
-            import tkinter as tk
-            from tkinter import messagebox
-
-            root = tk.Tk()
-            root.withdraw()
-            root.update_idletasks()
-            root.attributes("-topmost", True)
-            screen_w = root.winfo_screenwidth()
-            screen_h = root.winfo_screenheight()
-            root.geometry(f"+{screen_w // 2}+{screen_h // 3}")
-            messagebox.showwarning(
-                "Jitter — Permissions Required",
-                "Jitter needs two macOS permissions to work:\n\n"
-                "1. Accessibility — to simulate keypresses\n"
-                "2. Input Monitoring — to detect real keyboard activity\n\n"
-                "System Settings should have opened automatically.\n"
-                "Add Jitter to both lists under Privacy & Security,\n"
-                "then relaunch the app.",
-                parent=root,
+            subprocess.run(
+                ["osascript", "-e",
+                 'display dialog "Jitter needs two macOS permissions to work:\\n\\n'
+                 '1. Accessibility — to simulate keypresses\\n'
+                 '2. Input Monitoring — to detect real keyboard activity\\n\\n'
+                 'System Settings should have opened automatically.\\n'
+                 'Add Jitter to both lists under Privacy & Security, '
+                 'then relaunch the app." '
+                 'with title "Jitter — Permissions Required" '
+                 'buttons {"OK"} default button "OK" with icon caution'],
+                capture_output=True, timeout=120,
             )
-            root.destroy()
         except Exception:
             pass
         return False
