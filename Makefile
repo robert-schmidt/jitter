@@ -13,9 +13,11 @@ build-mac:
 		--hidden-import pynput.keyboard._darwin \
 		--hidden-import pynput.mouse._darwin \
 		run.py
-	@# Bundle cliclick binary inside the .app and re-sign
+	@# Bundle cliclick binary inside the .app
+	@# Sign cliclick first, then re-sign only the outer bundle (not --deep)
 	cp "$$(which cliclick)" dist/Jitter.app/Contents/Resources/cliclick
-	codesign --force --deep --sign - dist/Jitter.app
+	codesign --force --sign - dist/Jitter.app/Contents/Resources/cliclick
+	codesign --force --sign - dist/Jitter.app
 	@echo "Bundled cliclick and re-signed Jitter.app"
 
 build-win:
