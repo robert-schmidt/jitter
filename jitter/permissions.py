@@ -37,7 +37,11 @@ def check_all() -> bool:
 
             root = tk.Tk()
             root.withdraw()
+            root.update_idletasks()
             root.attributes("-topmost", True)
+            screen_w = root.winfo_screenwidth()
+            screen_h = root.winfo_screenheight()
+            root.geometry(f"+{screen_w // 2}+{screen_h // 3}")
             messagebox.showwarning(
                 "Jitter — Permissions Required",
                 "Jitter needs two macOS permissions to work:\n\n"
