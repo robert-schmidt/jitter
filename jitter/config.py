@@ -14,6 +14,7 @@ DEFAULTS = {
     "pulse_interval": 180,              # seconds
     "afk_threshold": 3600,              # 60 min
     "afk_skip": 600,                    # 10 min
+    "launch_at_login": False,
 }
 
 _cache: dict | None = None

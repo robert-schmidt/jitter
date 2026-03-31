@@ -16,6 +16,7 @@ DEFAULTS = {
     "pulse_interval": 180,
     "afk_threshold": 3600,
     "afk_skip": 600,
+    "launch_at_login": False,
 }
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -90,15 +91,14 @@ def _osa_choose_days(current_days: list[int]) -> list[int] | None:
         return None
 
 
-def show_macos():
-    cfg = _load()
-
-    # Main settings menu
+def _build_summary(cfg) -> str:
+    from jitter import startup
     days_str = ", ".join(DAY_NAMES[i] for i in cfg["schedule_days"])
     schedule_status = "ON" if cfg["schedule_enabled"] else "OFF"
-
-    menu_text = (
+    login_status = "ON" if startup.is_enabled() else "OFF"
+    return (
         f"Current settings:\\n\\n"
+        f"Launch at login: {login_status}\\n"
         f"Schedule: {schedule_status}\\n"
         f"Active hours: {cfg['schedule_start']} – {cfg['schedule_end']}\\n"
         f"Active days: {days_str}\\n"
@@ -107,14 +107,19 @@ def show_macos():
         f"AFK skip: {cfg['afk_skip'] // 60} min"
     )
 
+
+def show_macos():
+    cfg = _load()
+
     while True:
+        menu_text = _build_summary(cfg)
         try:
             result = subprocess.run(
                 ["osascript", "-e",
                  f'display dialog "{menu_text}" '
                  f'with title "Jitter Settings" '
-                 f'buttons {{"Done", "Edit Schedule", "Edit Timing"}} '
-                 f'default button "Done"'],
+                 f'buttons {{"Edit Timing", "Edit Schedule", "General"}} '
+                 f'default button "General"'],
                 capture_output=True, text=True, timeout=300,
             )
         except Exception:
@@ -125,25 +130,46 @@ def show_macos():
 
         output = result.stdout.strip()
 
-        if "Edit Schedule" in output:
+        if "General" in output:
+            _edit_general(cfg)
+        elif "Edit Schedule" in output:
             _edit_schedule(cfg)
         elif "Edit Timing" in output:
             _edit_timing(cfg)
         else:
             return
 
-        # Refresh display
-        days_str = ", ".join(DAY_NAMES[i] for i in cfg["schedule_days"])
-        schedule_status = "ON" if cfg["schedule_enabled"] else "OFF"
-        menu_text = (
-            f"Current settings:\\n\\n"
-            f"Schedule: {schedule_status}\\n"
-            f"Active hours: {cfg['schedule_start']} – {cfg['schedule_end']}\\n"
-            f"Active days: {days_str}\\n"
-            f"Pulse interval: {cfg['pulse_interval'] // 60} min\\n"
-            f"AFK threshold: {cfg['afk_threshold'] // 60} min\\n"
-            f"AFK skip: {cfg['afk_skip'] // 60} min"
+
+def _edit_general(cfg):
+    from jitter import startup
+    current = "ON" if startup.is_enabled() else "OFF"
+    try:
+        result = subprocess.run(
+            ["osascript", "-e",
+             f'display dialog "Launch at login is currently {current}.\\n\\n'
+             f'When enabled, Jitter will start automatically when you log in." '
+             f'with title "General" '
+             f'buttons {{"Cancel", "Toggle Launch at Login"}} '
+             f'default button "Toggle Launch at Login"'],
+            capture_output=True, text=True, timeout=120,
         )
+        if result.returncode != 0:
+            return
+
+        if "Toggle" in result.stdout:
+            if startup.is_enabled():
+                startup.disable()
+                cfg["launch_at_login"] = False
+                new_status = "OFF"
+            else:
+                startup.enable()
+                cfg["launch_at_login"] = True
+                new_status = "ON"
+            _save(cfg)
+            _osa(f'display dialog "Launch at login is now {new_status}." '
+                 f'with title "Jitter" buttons {{"OK"}} default button "OK"')
+    except Exception:
+        pass
 
 
 def _edit_schedule(cfg):

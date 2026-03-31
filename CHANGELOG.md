@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.0 — 2026-03-31
+
+- **Launch at login** — optional setting to start Jitter automatically on login (default: off)
+  - macOS: creates a LaunchAgent in `~/Library/LaunchAgents/`
+  - Windows: adds a registry key in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+- Settings dialog now has a **General** section to toggle launch at login
+- Added CHANGELOG.md
+
 ## v1.0.0 — 2026-03-31
 
 Initial release.
