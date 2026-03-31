@@ -3,22 +3,13 @@
 import logging
 import os
 import platform
+import random
+import shutil
 import subprocess
 import time
 import threading
 from datetime import datetime
 from jitter import idle, config
-
-# Debug log to help diagnose issues
-_log_path = os.path.join(os.path.expanduser("~"), ".jitter", "debug.log")
-os.makedirs(os.path.dirname(_log_path), exist_ok=True)
-logging.basicConfig(
-    filename=_log_path,
-    level=logging.DEBUG,
-    format="%(asctime)s %(message)s",
-    datefmt="%H:%M:%S",
-)
-_log = logging.getLogger("jitter")
 
 _caffeinate_proc: subprocess.Popen | None = None
 _lock = threading.Lock()
@@ -30,10 +21,24 @@ _next_pulse: float = 0
 
 SCHEDULE_CHECK = 30
 
+_log_path = os.path.join(os.path.expanduser("~"), ".jitter", "debug.log")
+os.makedirs(os.path.dirname(_log_path), exist_ok=True)
+logging.basicConfig(
+    filename=_log_path, level=logging.DEBUG,
+    format="%(asctime)s %(message)s", datefmt="%H:%M:%S",
+    force=True,
+)
+_log = logging.getLogger("jitter")
+
+# Check if cliclick is available (installed via brew install cliclick)
+_cliclick = shutil.which("cliclick")
+if _cliclick:
+    _log.debug("cliclick found at %s", _cliclick)
+else:
+    _log.debug("cliclick not found — using CGEvent/osascript")
+
 
 def _simulate_activity():
-    """Fire every available method to reset idle timers.
-    At least one of these will work regardless of permission state."""
     if platform.system() == "Darwin":
         _simulate_macos()
     else:
@@ -41,23 +46,41 @@ def _simulate_activity():
 
 
 def _simulate_macos():
-    # PRIMARY: osascript + System Events
+    # Generate random offsets for natural-looking movement
+    dx = random.randint(5, 20)
+    dy = random.randint(5, 20)
+
+    # METHOD 1: cliclick (native C binary — most reliable, separate process)
+    if _cliclick:
+        try:
+            # Move mouse in a natural pattern using relative movements
+            subprocess.run(
+                [_cliclick, f"m:+{dx},+0", f"m:+0,+{dy}", f"m:-{dx},-{dy}",
+                 "kp:shift", "kp:shift"],
+                capture_output=True, timeout=5,
+            )
+            _log.debug("cliclick: moved +%d,+%d and shift", dx, dy)
+        except Exception as e:
+            _log.debug("cliclick: FAILED - %s", e)
+
+    # METHOD 2: osascript + System Events (separate process, own Accessibility)
     try:
-        subprocess.Popen(
+        result = subprocess.run(
             ["osascript", "-e",
              'tell application "System Events"\n'
              '  key code 56\n'
              '  key code 60\n'
-             '  key code 113\n'
              'end tell'],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            capture_output=True, text=True, timeout=5,
         )
-        _log.debug("osascript: sent shift+rshift+F15 via System Events")
-    except OSError as e:
+        if result.returncode == 0:
+            _log.debug("osascript: sent shift+rshift via System Events")
+        else:
+            _log.debug("osascript: exit code %d stderr: %s", result.returncode, result.stderr.strip())
+    except Exception as e:
         _log.debug("osascript: FAILED - %s", e)
 
-    # SECONDARY: Quartz CGEvent — realistic multi-direction mouse movement
-    # Teams needs 2-3 moves in different directions to switch from Away
+    # METHOD 3: Quartz CGEvent (direct, if Accessibility is granted to this process)
     try:
         from Quartz import (
             CGEventCreateMouseEvent, CGEventCreateKeyboardEvent,
@@ -68,30 +91,26 @@ def _simulate_macos():
         pos = CGEventGetLocation(event)
         x, y = pos.x, pos.y
 
-        # Move right
+        # Natural multi-direction mouse movement
+        for step_x, step_y in [(dx, 0), (0, dy), (-dx, -dy)]:
+            CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
+                None, kCGEventMouseMoved, (x + step_x, y + step_y), 0))
+            time.sleep(0.03 + random.random() * 0.04)  # 30-70ms between moves
+            x, y = x + step_x, y + step_y
+
+        # Return to original position
+        orig = CGEventGetLocation(CGEventCreate(None))
         CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-            None, kCGEventMouseMoved, (x + 3, y), 0))
-        time.sleep(0.05)
-        # Move down
-        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-            None, kCGEventMouseMoved, (x + 3, y + 3), 0))
-        time.sleep(0.05)
-        # Move left
-        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-            None, kCGEventMouseMoved, (x - 2, y + 3), 0))
-        time.sleep(0.05)
-        # Move back to original
-        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-            None, kCGEventMouseMoved, (x, y), 0))
+            None, kCGEventMouseMoved, (pos.x, pos.y), 0))
 
         # Shift key
         CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, True))
         CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, False))
-        _log.debug("CGEvent: multi-move + shift at (%.0f, %.0f)", x, y)
+        _log.debug("CGEvent: multi-move (%+d,%+d) + shift at (%.0f, %.0f)", dx, dy, pos.x, pos.y)
     except Exception as e:
         _log.debug("CGEvent: FAILED - %s", e)
 
-    # TERTIARY: pynput fallback
+    # METHOD 4: pynput fallback
     try:
         from pynput.keyboard import Key, Controller
         kb = Controller()
@@ -103,23 +122,24 @@ def _simulate_macos():
 
 
 def _simulate_fallback():
-    """Windows fallback using pynput."""
     try:
         from pynput.keyboard import Key, Controller as KBController
         from pynput.mouse import Controller as MouseController
         kb = KBController()
         mouse = MouseController()
-
+        dx, dy = random.randint(5, 20), random.randint(5, 20)
+        mouse.move(dx, 0)
+        time.sleep(0.05)
+        mouse.move(0, dy)
+        time.sleep(0.05)
+        mouse.move(-dx, -dy)
         kb.press(Key.f15)
         kb.release(Key.f15)
-        mouse.move(1, 0)
-        mouse.move(-1, 0)
     except Exception:
         pass
 
 
 def _verify_idle_reset():
-    """Check actual system idle time after pulsing. If it's high, our events aren't landing."""
     if platform.system() != "Darwin":
         return
     try:
@@ -134,7 +154,7 @@ def _verify_idle_reset():
         if sys_idle < 2.0:
             _log.debug("VERIFY: system idle %.1fs — events ARE landing", sys_idle)
         else:
-            _log.warning("VERIFY: system idle %.1fs — events NOT landing! Accessibility may not be working.", sys_idle)
+            _log.warning("VERIFY: system idle %.1fs — events NOT landing!", sys_idle)
     except Exception as e:
         _log.debug("VERIFY: could not check - %s", e)
 
@@ -207,8 +227,7 @@ def _tick():
             _log.debug("TICK: pulsing (idle %.0fs, interval %ds)", idle.idle_seconds(), interval)
             _simulate_activity()
             _poke_caffeinate(interval)
-            # Verify: did we actually reset the system idle timer?
-            time.sleep(0.2)
+            time.sleep(0.3)
             _verify_idle_reset()
             _next_pulse = time.time() + interval
             _timer = threading.Timer(interval, _tick)
