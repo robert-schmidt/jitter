@@ -18,20 +18,16 @@ def _time_picker(parent, label_text: str, initial: str) -> tuple[ttk.Spinbox, tt
 
     h, m = initial.split(":")
 
-    hour_var = tk.StringVar(value=h)
-    hour_spin = ttk.Spinbox(
-        frame, from_=0, to=23, width=3, textvariable=hour_var,
-        format="%02.0f", wrap=True,
-    )
+    hour_values = [f"{i:02d}" for i in range(24)]
+    hour_spin = ttk.Spinbox(frame, values=hour_values, width=3, wrap=True)
+    hour_spin.set(h)
     hour_spin.pack(side="left", padx=(5, 0))
 
     ttk.Label(frame, text=":").pack(side="left")
 
-    min_var = tk.StringVar(value=m)
-    min_spin = ttk.Spinbox(
-        frame, from_=0, to=59, width=3, textvariable=min_var,
-        format="%02.0f", wrap=True, increment=15,
-    )
+    min_values = [f"{i:02d}" for i in range(0, 60, 15)]
+    min_spin = ttk.Spinbox(frame, values=min_values, width=3, wrap=True)
+    min_spin.set(m)
     min_spin.pack(side="left")
 
     return hour_spin, min_spin
@@ -138,6 +134,7 @@ def show():
     btn_frame.pack(pady=15)
 
     def _on_save():
+        from tkinter import messagebox
         new_cfg = {
             "schedule_enabled": schedule_var.get(),
             "schedule_start": _read_time(start_h, start_m),
@@ -148,6 +145,7 @@ def show():
             "afk_skip": max(60, skip_var.get() * 60),
         }
         config.save(new_cfg)
+        messagebox.showinfo("Jitter", "Settings saved.", parent=win)
         _on_close()
 
     def _on_close():
