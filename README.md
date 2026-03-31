@@ -56,7 +56,7 @@ git clone https://github.com/robert-schmidt/jitter.git /tmp/jitter && cd /tmp/ji
 
 ### macOS
 
-Jitter requires two system permissions to function. On first launch, the app will automatically trigger the macOS permission prompt and show a guidance dialog explaining what's needed.
+Jitter requires two system permissions to function. On every launch, the app checks whether it can simulate keypresses and listen for keyboard input. If either permission is missing, it tells you exactly which one(s) to grant and opens System Settings. If both are already granted, no dialog appears.
 
 You must grant **both** of the following in **System Settings → Privacy & Security**:
 
@@ -111,8 +111,9 @@ jitter/
 │   ├── heartbeat.py     — F15 timer loop with AFK skip logic
 │   ├── idle.py          — monitors real keyboard input
 │   ├── icons.py         — generates tray icons (green/amber/gray circles)
-│   ├── dialogs.py       — About window and quit confirmation
-│   └── permissions.py   — macOS permission checks and prompts
+│   ├── dialogs.py       — About window (with GitHub link) and quit confirmation
+│   └── permissions.py   — macOS permission checks (tests actual keypress/listener)
+├── run.py               — PyInstaller entry point (outside package)
 ├── Makefile             — build targets for macOS and Windows
 ├── requirements.txt
 └── README.md
