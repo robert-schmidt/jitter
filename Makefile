@@ -10,6 +10,7 @@ build-mac:
 		--osx-bundle-identifier com.jitter.app \
 		--hidden-import pynput.keyboard._darwin \
 		--hidden-import pynput.mouse._darwin \
+		--add-data "jitter/_settings_runner.py:jitter" \
 		run.py
 
 build-win:
@@ -19,6 +20,7 @@ build-win:
 		--windowed \
 		--hidden-import pynput.keyboard._win32 \
 		--hidden-import pynput.mouse._win32 \
+		--add-data "jitter/_settings_runner.py:jitter" \
 		run.py
 
 clean:
