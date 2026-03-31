@@ -31,21 +31,27 @@ _fh.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"
 _log.addHandler(_fh)
 
 def _find_cliclick() -> str | None:
-    """Find cliclick binary — check PATH, Homebrew, and bundled location."""
-    # Check PATH first
+    """Find cliclick binary — check ~/.jitter/bin, PATH, Homebrew."""
+    local = os.path.join(os.path.expanduser("~"), ".jitter", "bin", "cliclick")
+    if os.path.isfile(local) and os.access(local, os.X_OK):
+        return local
     path = shutil.which("cliclick")
     if path:
         return path
-    # Check common Homebrew locations
     for p in ["/opt/homebrew/bin/cliclick", "/usr/local/bin/cliclick"]:
         if os.path.isfile(p) and os.access(p, os.X_OK):
             return p
-    # Check bundled with the app (PyInstaller)
+    # Check next to the .app (shipped in the zip alongside it)
     if getattr(sys, "frozen", False):
-        app_dir = os.path.dirname(os.path.dirname(sys.executable))
-        bundled = os.path.join(app_dir, "Resources", "cliclick")
-        if os.path.isfile(bundled) and os.access(bundled, os.X_OK):
-            return bundled
+        app_dir = os.path.dirname(os.path.dirname(os.path.dirname(sys.executable)))
+        beside = os.path.join(app_dir, "cliclick")
+        if os.path.isfile(beside):
+            # Copy to ~/.jitter/bin/ for future use
+            dest_dir = os.path.join(os.path.expanduser("~"), ".jitter", "bin")
+            os.makedirs(dest_dir, exist_ok=True)
+            shutil.copy2(beside, local)
+            os.chmod(local, 0o755)
+            return local
     return None
 
 
