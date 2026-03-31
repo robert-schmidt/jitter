@@ -1,16 +1,12 @@
-"""Timer loop that sends periodic keypresses and caffeinate to prevent idle status."""
+"""Timer loop that simulates user activity to prevent idle status."""
 
 import platform
 import subprocess
 import time
 import threading
 from datetime import datetime
-from pynput.keyboard import Key, Controller as KBController
-from pynput.mouse import Controller as MouseController
 from jitter import idle, config
 
-_keyboard = KBController()
-_mouse = MouseController()
 _caffeinate_proc: subprocess.Popen | None = None
 _lock = threading.Lock()
 _timer: threading.Timer | None = None
@@ -22,13 +18,67 @@ _next_pulse: float = 0
 SCHEDULE_CHECK = 30  # re-check schedule every 30s when outside window
 
 
+def _simulate_activity():
+    """Simulate user activity using the most direct APIs available.
+    On macOS, uses Quartz CGEvent (the exact API Teams checks) + caffeinate.
+    On other platforms, falls back to pynput."""
+    if platform.system() == "Darwin":
+        _simulate_macos()
+    else:
+        _simulate_fallback()
+
+
+def _simulate_macos():
+    """Post events directly via Quartz CGEvent — guaranteed to register
+    with CGEventSource.secondsSinceLastEventType, which is what Teams uses."""
+    try:
+        from Quartz import (
+            CGEventCreateMouseEvent, CGEventCreateKeyboardEvent,
+            CGEventPost, CGEventCreate, CGEventGetLocation,
+            kCGEventMouseMoved, kCGHIDEventTap,
+        )
+
+        # 1. Mouse nudge via CGEvent (move 1px right, then back)
+        event = CGEventCreate(None)
+        pos = CGEventGetLocation(event)
+        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
+            None, kCGEventMouseMoved, (pos.x + 1, pos.y), 0))
+        time.sleep(0.05)
+        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
+            None, kCGEventMouseMoved, (pos.x, pos.y), 0))
+
+        # 2. Shift key press/release via CGEvent (keycode 56)
+        CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, True))
+        CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, False))
+
+    except Exception:
+        # Fall back to pynput if Quartz isn't available
+        _simulate_fallback()
+
+
+def _simulate_fallback():
+    """Fallback using pynput — for Windows or if Quartz fails."""
+    try:
+        from pynput.keyboard import Key, Controller as KBController
+        from pynput.mouse import Controller as MouseController
+        kb = KBController()
+        mouse = MouseController()
+
+        kb.press(Key.f15)
+        kb.release(Key.f15)
+
+        pos = mouse.position
+        mouse.move(1, 0)
+        mouse.move(-1, 0)
+    except Exception:
+        pass
+
+
 def _poke_caffeinate(duration: int):
-    """On macOS, use caffeinate -u to assert user activity for the given duration.
-    This resets IOKit HIDIdleTime, which is what Teams actually checks."""
+    """On macOS, use caffeinate -u to assert user activity."""
     global _caffeinate_proc
     if platform.system() != "Darwin":
         return
-    # Kill any existing caffeinate before starting a new one
     if _caffeinate_proc is not None:
         try:
             _caffeinate_proc.kill()
@@ -59,7 +109,6 @@ def _is_within_schedule() -> bool:
     if start <= end:
         return start <= current < end
     else:
-        # Overnight schedule, e.g. 22:00 - 06:00
         return current >= start or current < end
 
 
@@ -89,19 +138,7 @@ def _tick():
             if _skipping:
                 idle.reset()
             _skipping = False
-            # Triple approach to reset all idle detectors:
-            # 1. F15 keypress (invisible key, no side effects)
-            _keyboard.press(Key.f15)
-            _keyboard.release(Key.f15)
-            # 2. Mouse nudge (1px right then back — registers as Quartz event,
-            #    which is what Teams actually checks via CGEventSource)
-            try:
-                pos = _mouse.position
-                _mouse.move(1, 0)
-                _mouse.move(-1, 0)
-            except Exception:
-                pass
-            # 3. caffeinate -u (resets IOKit HIDIdleTime)
+            _simulate_activity()
             _poke_caffeinate(interval)
             _next_pulse = time.time() + interval
             _timer = threading.Timer(interval, _tick)
