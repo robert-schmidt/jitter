@@ -25,18 +25,24 @@ Jitter takes a different approach. It's not an app from the App Store that can b
 
 ## How It Works
 
-- Every **3 minutes** (configurable), Jitter sends an **F15 keypress** and runs `caffeinate -u` on macOS to reset the system idle timer. F15 alone doesn't reset HIDIdleTime (which Teams checks), so both are used together.
+- Every **3 minutes** (configurable), Jitter uses a triple approach to reset all idle detectors:
+  1. **F15 keypress** — an invisible key with no side effects
+  2. **Mouse nudge** — moves the cursor 1 pixel right then back. This registers as a Quartz-level event, which is what Teams actually checks via `CGEventSource`
+  3. **`caffeinate -u`** (macOS) — resets IOKit HIDIdleTime at the system level
 - After **60 minutes** of no real keyboard input (configurable), Jitter inserts a **10-minute skip** (configurable) before the next pulse to look more like natural human activity. After the skip, the idle counter resets and the cycle repeats.
 - **Schedule support** — set active hours (default 09:00–18:00, weekdays) so Jitter only runs during work time. Outside the schedule, it sleeps and the icon turns gray.
 - **Launch at login** — optional setting to start Jitter automatically (default: off).
 - Everything runs in the **system tray** — no windows, no dock icon, no distractions.
-- **Note on screensavers:** `caffeinate -u` asserts user activity to the OS, which will prevent display sleep and screensaver activation while Jitter is actively pulsing. Outside the schedule or when paused, the system behaves normally.
+
+> **Tip:** Pause Jitter while you're actively working — the mouse nudge can interfere with precise cursor work (design tools, spreadsheets, etc.). Use the tray menu to quickly pause and resume. When paused, the system behaves completely normally.
+
+- **Note on screensavers:** While actively pulsing, Jitter will prevent display sleep and screensaver activation. Outside the schedule or when paused, the system behaves normally.
 
 ### Tray Menu
 
 | Icon | State | Meaning |
 |------|-------|---------|
-| 🟢 | Active | Sending F15 — shows countdown to next pulse |
+| 🟢 | Active | Pulsing — shows countdown to next pulse |
 | 🟡 | AFK Skip | Waiting after long idle — shows countdown |
 | ⚪ | Outside schedule | Sleeping until next active window |
 | ⚪ | Paused | Manually paused |
