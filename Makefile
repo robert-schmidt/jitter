@@ -13,9 +13,10 @@ build-mac:
 		--hidden-import pynput.keyboard._darwin \
 		--hidden-import pynput.mouse._darwin \
 		run.py
-	@# Bundle cliclick binary inside the .app
+	@# Bundle cliclick binary inside the .app and re-sign
 	cp "$$(which cliclick)" dist/Jitter.app/Contents/Resources/cliclick
-	@echo "Bundled cliclick into Jitter.app"
+	codesign --force --deep --sign - dist/Jitter.app
+	@echo "Bundled cliclick and re-signed Jitter.app"
 
 build-win:
 	pyinstaller \
