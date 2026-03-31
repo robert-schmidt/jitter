@@ -10,7 +10,7 @@ build-mac:
 		--osx-bundle-identifier com.jitter.app \
 		--hidden-import pynput.keyboard._darwin \
 		--hidden-import pynput.mouse._darwin \
-		--add-data "jitter/_settings_runner.py:jitter" \
+		--codesign-identity - \
 		run.py
 
 build-win:
