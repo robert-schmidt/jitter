@@ -1,11 +1,24 @@
-"""Timer loop that simulates user activity to prevent idle status."""
+"""Timer loop that simulates user activity to prevent idle/away status."""
 
+import logging
+import os
 import platform
 import subprocess
 import time
 import threading
 from datetime import datetime
 from jitter import idle, config
+
+# Debug log to help diagnose issues
+_log_path = os.path.join(os.path.expanduser("~"), ".jitter", "debug.log")
+os.makedirs(os.path.dirname(_log_path), exist_ok=True)
+logging.basicConfig(
+    filename=_log_path,
+    level=logging.DEBUG,
+    format="%(asctime)s %(message)s",
+    datefmt="%H:%M:%S",
+)
+_log = logging.getLogger("jitter")
 
 _caffeinate_proc: subprocess.Popen | None = None
 _lock = threading.Lock()
@@ -15,13 +28,12 @@ _skipping = False
 _outside_schedule = False
 _next_pulse: float = 0
 
-SCHEDULE_CHECK = 30  # re-check schedule every 30s when outside window
+SCHEDULE_CHECK = 30
 
 
 def _simulate_activity():
-    """Simulate user activity using the most direct APIs available.
-    On macOS, uses Quartz CGEvent (the exact API Teams checks) + caffeinate.
-    On other platforms, falls back to pynput."""
+    """Fire every available method to reset idle timers.
+    At least one of these will work regardless of permission state."""
     if platform.system() == "Darwin":
         _simulate_macos()
     else:
@@ -29,16 +41,28 @@ def _simulate_activity():
 
 
 def _simulate_macos():
-    """Post events directly via Quartz CGEvent — guaranteed to register
-    with CGEventSource.secondsSinceLastEventType, which is what Teams uses."""
+    # PRIMARY: osascript + System Events
+    try:
+        subprocess.Popen(
+            ["osascript", "-e",
+             'tell application "System Events"\n'
+             '  key code 56\n'
+             '  key code 60\n'
+             '  key code 113\n'
+             'end tell'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        _log.debug("osascript: sent shift+rshift+F15 via System Events")
+    except OSError as e:
+        _log.debug("osascript: FAILED - %s", e)
+
+    # SECONDARY: Quartz CGEvent
     try:
         from Quartz import (
             CGEventCreateMouseEvent, CGEventCreateKeyboardEvent,
             CGEventPost, CGEventCreate, CGEventGetLocation,
             kCGEventMouseMoved, kCGHIDEventTap,
         )
-
-        # 1. Mouse nudge via CGEvent (move 1px right, then back)
         event = CGEventCreate(None)
         pos = CGEventGetLocation(event)
         CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
@@ -46,18 +70,25 @@ def _simulate_macos():
         time.sleep(0.05)
         CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
             None, kCGEventMouseMoved, (pos.x, pos.y), 0))
-
-        # 2. Shift key press/release via CGEvent (keycode 56)
         CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, True))
         CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, False))
+        _log.debug("CGEvent: mouse nudge + shift at (%.0f, %.0f)", pos.x, pos.y)
+    except Exception as e:
+        _log.debug("CGEvent: FAILED - %s", e)
 
-    except Exception:
-        # Fall back to pynput if Quartz isn't available
-        _simulate_fallback()
+    # TERTIARY: pynput fallback
+    try:
+        from pynput.keyboard import Key, Controller
+        kb = Controller()
+        kb.press(Key.f15)
+        kb.release(Key.f15)
+        _log.debug("pynput: F15 sent")
+    except Exception as e:
+        _log.debug("pynput: FAILED - %s", e)
 
 
 def _simulate_fallback():
-    """Fallback using pynput — for Windows or if Quartz fails."""
+    """Windows fallback using pynput."""
     try:
         from pynput.keyboard import Key, Controller as KBController
         from pynput.mouse import Controller as MouseController
@@ -66,8 +97,6 @@ def _simulate_fallback():
 
         kb.press(Key.f15)
         kb.release(Key.f15)
-
-        pos = mouse.position
         mouse.move(1, 0)
         mouse.move(-1, 0)
     except Exception:
@@ -75,7 +104,6 @@ def _simulate_fallback():
 
 
 def _poke_caffeinate(duration: int):
-    """On macOS, use caffeinate -u to assert user activity."""
     global _caffeinate_proc
     if platform.system() != "Darwin":
         return
@@ -126,11 +154,13 @@ def _tick():
         if not _is_within_schedule():
             _outside_schedule = True
             _skipping = False
+            _log.debug("TICK: outside schedule, sleeping %ds", SCHEDULE_CHECK)
             _next_pulse = time.time() + SCHEDULE_CHECK
             _timer = threading.Timer(SCHEDULE_CHECK, _tick)
         elif idle.idle_seconds() >= afk_threshold and not _skipping:
             _outside_schedule = False
             _skipping = True
+            _log.debug("TICK: AFK skip (idle %.0fs >= %ds)", idle.idle_seconds(), afk_threshold)
             _next_pulse = time.time() + skip_interval
             _timer = threading.Timer(skip_interval, _tick)
         else:
@@ -138,6 +168,7 @@ def _tick():
             if _skipping:
                 idle.reset()
             _skipping = False
+            _log.debug("TICK: pulsing (idle %.0fs, interval %ds)", idle.idle_seconds(), interval)
             _simulate_activity()
             _poke_caffeinate(interval)
             _next_pulse = time.time() + interval
