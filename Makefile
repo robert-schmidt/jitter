@@ -4,6 +4,8 @@ run:
 	python -m jitter.main
 
 build-mac:
+	@# Ensure cliclick is available
+	@which cliclick >/dev/null 2>&1 || (echo "Installing cliclick..." && brew install cliclick)
 	pyinstaller \
 		--name Jitter \
 		--windowed \
@@ -11,6 +13,9 @@ build-mac:
 		--hidden-import pynput.keyboard._darwin \
 		--hidden-import pynput.mouse._darwin \
 		run.py
+	@# Bundle cliclick binary inside the .app
+	cp "$$(which cliclick)" dist/Jitter.app/Contents/Resources/cliclick
+	@echo "Bundled cliclick into Jitter.app"
 
 build-win:
 	pyinstaller \

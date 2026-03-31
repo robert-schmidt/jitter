@@ -6,6 +6,7 @@ import platform
 import random
 import shutil
 import subprocess
+import sys
 import time
 import threading
 from datetime import datetime
@@ -23,19 +24,36 @@ SCHEDULE_CHECK = 30
 
 _log_path = os.path.join(os.path.expanduser("~"), ".jitter", "debug.log")
 os.makedirs(os.path.dirname(_log_path), exist_ok=True)
-logging.basicConfig(
-    filename=_log_path, level=logging.DEBUG,
-    format="%(asctime)s %(message)s", datefmt="%H:%M:%S",
-    force=True,
-)
-_log = logging.getLogger("jitter")
+_log = logging.getLogger("jitter.heartbeat")
+_log.setLevel(logging.DEBUG)
+_fh = logging.FileHandler(_log_path, mode="a")
+_fh.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
+_log.addHandler(_fh)
 
-# Check if cliclick is available (installed via brew install cliclick)
-_cliclick = shutil.which("cliclick")
+def _find_cliclick() -> str | None:
+    """Find cliclick binary — check PATH, Homebrew, and bundled location."""
+    # Check PATH first
+    path = shutil.which("cliclick")
+    if path:
+        return path
+    # Check common Homebrew locations
+    for p in ["/opt/homebrew/bin/cliclick", "/usr/local/bin/cliclick"]:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    # Check bundled with the app (PyInstaller)
+    if getattr(sys, "frozen", False):
+        app_dir = os.path.dirname(os.path.dirname(sys.executable))
+        bundled = os.path.join(app_dir, "Resources", "cliclick")
+        if os.path.isfile(bundled) and os.access(bundled, os.X_OK):
+            return bundled
+    return None
+
+
+_cliclick = _find_cliclick()
 if _cliclick:
     _log.debug("cliclick found at %s", _cliclick)
 else:
-    _log.debug("cliclick not found — using CGEvent/osascript")
+    _log.debug("cliclick not found — install with: brew install cliclick")
 
 
 def _simulate_activity():
