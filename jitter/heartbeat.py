@@ -2,38 +2,71 @@
 
 import time
 import threading
+from datetime import datetime
 from pynput.keyboard import Key, Controller
-from jitter import idle
-
-INTERVAL = 180       # 3 minutes
-SKIP_INTERVAL = 600  # 10 minutes when truly AFK
+from jitter import idle, config
 
 _keyboard = Controller()
 _lock = threading.Lock()
 _timer: threading.Timer | None = None
 _running = False
 _skipping = False
+_outside_schedule = False
 _next_pulse: float = 0
+
+SCHEDULE_CHECK = 30  # re-check schedule every 30s when outside window
+
+
+def _is_within_schedule() -> bool:
+    cfg = config.load()
+    if not cfg["schedule_enabled"]:
+        return True
+
+    now = datetime.now()
+    if now.weekday() not in cfg["schedule_days"]:
+        return False
+
+    current = now.strftime("%H:%M")
+    start = cfg["schedule_start"]
+    end = cfg["schedule_end"]
+
+    if start <= end:
+        return start <= current < end
+    else:
+        # Overnight schedule, e.g. 22:00 - 06:00
+        return current >= start or current < end
 
 
 def _tick():
-    global _timer, _skipping, _next_pulse
+    global _timer, _skipping, _next_pulse, _outside_schedule
     with _lock:
         if not _running:
             return
 
-        if idle.is_truly_afk() and not _skipping:
+        cfg = config.load()
+        interval = cfg["pulse_interval"]
+        skip_interval = cfg["afk_skip"]
+        afk_threshold = cfg["afk_threshold"]
+
+        if not _is_within_schedule():
+            _outside_schedule = True
+            _skipping = False
+            _next_pulse = time.time() + SCHEDULE_CHECK
+            _timer = threading.Timer(SCHEDULE_CHECK, _tick)
+        elif idle.idle_seconds() >= afk_threshold and not _skipping:
+            _outside_schedule = False
             _skipping = True
-            _next_pulse = time.time() + SKIP_INTERVAL
-            _timer = threading.Timer(SKIP_INTERVAL, _tick)
+            _next_pulse = time.time() + skip_interval
+            _timer = threading.Timer(skip_interval, _tick)
         else:
+            _outside_schedule = False
             if _skipping:
                 idle.reset()
             _skipping = False
             _keyboard.press(Key.f15)
             _keyboard.release(Key.f15)
-            _next_pulse = time.time() + INTERVAL
-            _timer = threading.Timer(INTERVAL, _tick)
+            _next_pulse = time.time() + interval
+            _timer = threading.Timer(interval, _tick)
 
         _timer.daemon = True
         _timer.start()
@@ -64,6 +97,10 @@ def is_running() -> bool:
 
 def is_skipping() -> bool:
     return _skipping
+
+
+def is_outside_schedule() -> bool:
+    return _outside_schedule
 
 
 def seconds_until_next() -> int:

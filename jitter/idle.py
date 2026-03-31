@@ -3,8 +3,6 @@
 import time
 from pynput.keyboard import Key, Listener
 
-AFK_THRESHOLD = 3600  # 60 minutes in seconds
-
 _last_real_input: float = time.time()
 _listener: Listener | None = None
 
@@ -33,7 +31,3 @@ def idle_seconds() -> float:
 def reset():
     global _last_real_input
     _last_real_input = time.time()
-
-
-def is_truly_afk() -> bool:
-    return idle_seconds() >= AFK_THRESHOLD

@@ -19,19 +19,33 @@ Jitter is a small, peaceful act of resistance. It presses a key that does nothin
 
 ## How It Works
 
-- Every **3 minutes**, Jitter sends an **F15 keypress** — a key that exists on no modern keyboard and has zero side effects on any OS. It's enough to reset idle timers without interfering with anything.
-- After **60 minutes** of no real keyboard input (you're truly AFK), Jitter inserts a **10-minute skip** before the next keypress to look more like natural human activity. After the skip, the idle counter resets and the cycle repeats.
+- Every **3 minutes** (configurable), Jitter sends an **F15 keypress** — a key that exists on no modern keyboard and has zero side effects on any OS. It's enough to reset idle timers without interfering with anything.
+- After **60 minutes** of no real keyboard input (configurable), Jitter inserts a **10-minute skip** (configurable) before the next keypress to look more like natural human activity. After the skip, the idle counter resets and the cycle repeats.
+- **Schedule support** — set active hours (default 09:00–18:00, weekdays) so Jitter only runs during work time. Outside the schedule, it sleeps and the icon turns gray.
 - Everything runs in the **system tray** — no windows, no dock icon, no distractions.
+- **Screensavers and display sleep** are generally not affected — simulated F15 keypresses via `pynput` don't reset macOS's HIDIdleTime, so your screen will still lock and sleep normally.
 
 ### Tray Menu
 
 | Icon | State | Meaning |
 |------|-------|---------|
-| 🟢 | Active | Sending F15 every 3 min — shows countdown to next pulse |
-| 🟡 | AFK Skip | Waiting 10 min (idle >60 min) — shows countdown to next pulse |
+| 🟢 | Active | Sending F15 — shows countdown to next pulse |
+| 🟡 | AFK Skip | Waiting after long idle — shows countdown |
+| ⚪ | Outside schedule | Sleeping until next active window |
 | ⚪ | Paused | Manually paused |
 
-Click the tray icon for **Pause/Resume**, **About**, and **Quit** (with confirmation).
+Click the tray icon for **Pause/Resume**, **Settings**, **About** (with GitHub link), and **Quit** (with confirmation).
+
+### Settings
+
+Open **Settings** from the tray menu to configure:
+
+- **Schedule** — enable/disable, start and end time, active days of the week
+- **Pulse interval** — how often to send F15 (default: 3 minutes)
+- **AFK threshold** — how long without real input before triggering a skip (default: 60 minutes)
+- **AFK skip duration** — how long to wait during a skip (default: 10 minutes)
+
+Settings are saved to `~/.jitter/config.json` and persist across restarts.
 
 ## Install & Run
 
@@ -112,7 +126,9 @@ jitter/
 │   ├── idle.py          — monitors real keyboard input
 │   ├── icons.py         — generates tray icons (green/amber/gray circles)
 │   ├── dialogs.py       — About window (with GitHub link) and quit confirmation
-│   └── permissions.py   — macOS permission checks (tests actual keypress/listener)
+│   ├── permissions.py   — macOS permission checks (tests actual keypress/listener)
+│   ├── config.py        — persistent settings (~/.jitter/config.json)
+│   └── settings_ui.py   — Settings window with schedule and timing controls
 ├── run.py               — PyInstaller entry point (outside package)
 ├── Makefile             — build targets for macOS and Windows
 ├── requirements.txt
