@@ -145,7 +145,7 @@ def show():
             "afk_skip": max(60, skip_var.get() * 60),
         }
         config.save(new_cfg)
-        messagebox.showinfo("Jitter", "Settings saved.", parent=win)
+        messagebox.showinfo("Jitter", "Settings saved.\n\nQuit & reopen the app for the new settings to take effect.", parent=win)
         _on_close()
 
     def _on_close():
