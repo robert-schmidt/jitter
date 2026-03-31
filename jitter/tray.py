@@ -42,10 +42,21 @@ def _toggle(icon: pystray.Icon, _item: MenuItem):
 
 
 def _open_settings(icon: pystray.Icon, _item: MenuItem):
-    # tkinter must run in its own process on macOS — pystray owns the main thread
-    import multiprocessing
-    p = multiprocessing.Process(target=settings_ui.show, daemon=True)
-    p.start()
+    import subprocess, sys, os
+    # Find the runner script — check multiple locations for source and frozen builds
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "_settings_runner.py"),
+    ]
+    if getattr(sys, "frozen", False):
+        # PyInstaller macOS .app: --add-data lands in Contents/Resources
+        app_dir = os.path.dirname(os.path.dirname(sys.executable))  # Contents/
+        candidates.insert(0, os.path.join(app_dir, "Resources", "jitter", "_settings_runner.py"))
+        candidates.insert(1, os.path.join(sys._MEIPASS, "jitter", "_settings_runner.py"))
+
+    for runner in candidates:
+        if os.path.exists(runner):
+            subprocess.Popen(["python3", runner])
+            return
 
 
 def _about(icon: pystray.Icon, _item: MenuItem):

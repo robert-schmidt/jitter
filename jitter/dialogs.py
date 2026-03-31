@@ -72,15 +72,21 @@ def show_about():
 def confirm_quit() -> bool:
     if platform.system() == "Darwin":
         try:
-            result = _osascript(
-                'display dialog "Are you sure you want to quit Jitter?\\n\\n'
-                'Teams will be able to detect idle status." '
-                'with title "Quit Jitter" '
-                'buttons {"Cancel", "Quit"} default button "Cancel" '
-                'cancel button "Cancel"'
+            proc = subprocess.run(
+                ["osascript", "-e",
+                 'display dialog "Are you sure you want to quit Jitter?\\n\\n'
+                 'Teams will be able to detect idle status." '
+                 'with title "Quit Jitter" '
+                 'buttons {"Cancel", "Quit"} default button "Cancel"'],
+                capture_output=True, text=True, timeout=120,
             )
-            return "Quit" in result
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+            # osascript returns exit code 1 when user clicks Cancel
+            # and exit code 0 with "button returned:Quit" on Quit
+            if proc.returncode == 0:
+                return "Quit" in proc.stdout
             return False
+        except Exception:
+            # If osascript fails entirely, allow quit so the app isn't stuck
+            return True
     else:
         return _tk_confirm_quit()
