@@ -9,11 +9,11 @@ CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".jitter")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 
 DEFAULTS = {
-    "schedule_enabled": True,
+    "schedule_enabled": False,
     "schedule_start": "09:00",
     "schedule_end": "18:00",
     "schedule_days": [0, 1, 2, 3, 4],
-    "pulse_interval": 180,
+    "pulse_interval": 120,
     "afk_threshold": 3600,
     "afk_skip": 600,
     "launch_at_login": False,
