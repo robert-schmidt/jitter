@@ -1,267 +1,135 @@
-"""Native macOS settings dialogs using osascript. Fallback to tkinter on Windows."""
+"""Settings dialog. Uses system python3 + tkinter on macOS, inline tkinter on Windows."""
 
 import json
 import os
 import platform
 import subprocess
+import sys
+import textwrap
 
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".jitter")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 
+# Self-contained tkinter settings script — no jitter imports needed.
+# Launched as a standalone python3 process so tkinter gets the main thread.
+_TK_SCRIPT = textwrap.dedent(r'''
+import json, os, sys
+from tkinter import *
+from tkinter import ttk, messagebox
+
+CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".jitter")
+CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 DEFAULTS = {
-    "schedule_enabled": True,
-    "schedule_start": "09:00",
-    "schedule_end": "18:00",
-    "schedule_days": [0, 1, 2, 3, 4],
-    "pulse_interval": 180,
-    "afk_threshold": 3600,
-    "afk_skip": 600,
-    "launch_at_login": False,
+    "schedule_enabled": True, "schedule_start": "09:00", "schedule_end": "18:00",
+    "schedule_days": [0,1,2,3,4], "pulse_interval": 180,
+    "afk_threshold": 3600, "afk_skip": 600, "launch_at_login": False,
 }
+DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 
-DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
-
-def _load():
+def load():
     try:
-        with open(CONFIG_PATH) as f:
-            return {**DEFAULTS, **json.load(f)}
-    except (FileNotFoundError, json.JSONDecodeError):
-        return dict(DEFAULTS)
+        with open(CONFIG_PATH) as f: return {**DEFAULTS, **json.load(f)}
+    except: return dict(DEFAULTS)
 
-
-def _save(cfg):
+def save(cfg):
     os.makedirs(CONFIG_DIR, exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(cfg, f, indent=2)
+    with open(CONFIG_PATH, "w") as f: json.dump(cfg, f, indent=2)
 
+cfg = load()
+win = Tk()
+win.title("Jitter Settings")
+win.resizable(False, False)
+win.attributes("-topmost", True)
 
-def _osa(script: str) -> str:
-    proc = subprocess.run(
-        ["osascript", "-e", script],
-        capture_output=True, text=True, timeout=120,
-    )
-    return proc.stdout.strip()
+# --- Schedule ---
+sf = ttk.LabelFrame(win, text="Active Schedule", padding=10)
+sf.pack(fill="x", padx=15, pady=(15,5))
 
+sched_var = BooleanVar(value=cfg["schedule_enabled"])
+ttk.Checkbutton(sf, text="Only run during scheduled hours", variable=sched_var).pack(anchor="w", padx=5)
 
-def _osa_input(title: str, prompt: str, default: str) -> str | None:
-    """Show an input dialog. Returns the text or None if cancelled."""
-    escaped_default = default.replace('"', '\\"')
-    escaped_prompt = prompt.replace('"', '\\"')
-    try:
-        result = subprocess.run(
-            ["osascript", "-e",
-             f'display dialog "{escaped_prompt}" '
-             f'with title "{title}" '
-             f'default answer "{escaped_default}" '
-             f'buttons {{"Cancel", "OK"}} default button "OK"'],
-            capture_output=True, text=True, timeout=120,
-        )
-        if result.returncode != 0:
-            return None
-        # Parse "button returned:OK, text returned:value"
-        for part in result.stdout.strip().split(", "):
-            if part.startswith("text returned:"):
-                return part[len("text returned:"):]
-    except Exception:
-        pass
-    return None
+tf1 = ttk.Frame(sf); tf1.pack(fill="x", padx=20, pady=(8,0))
+ttk.Label(tf1, text="Start time:", width=12, anchor="w").pack(side="left")
+hrs = [f"{i:02d}" for i in range(24)]
+mins = [f"{i:02d}" for i in range(0,60,15)]
+sh, sm = cfg["schedule_start"].split(":")
+start_h = ttk.Spinbox(tf1, values=hrs, width=3, wrap=True); start_h.set(sh); start_h.pack(side="left", padx=(5,0))
+ttk.Label(tf1, text=":").pack(side="left")
+start_m = ttk.Spinbox(tf1, values=mins, width=3, wrap=True); start_m.set(sm); start_m.pack(side="left")
 
+tf2 = ttk.Frame(sf); tf2.pack(fill="x", padx=20, pady=(8,0))
+ttk.Label(tf2, text="End time:", width=12, anchor="w").pack(side="left")
+eh, em = cfg["schedule_end"].split(":")
+end_h = ttk.Spinbox(tf2, values=hrs, width=3, wrap=True); end_h.set(eh); end_h.pack(side="left", padx=(5,0))
+ttk.Label(tf2, text=":").pack(side="left")
+end_m = ttk.Spinbox(tf2, values=mins, width=3, wrap=True); end_m.set(em); end_m.pack(side="left")
 
-def _osa_choose_days(current_days: list[int]) -> list[int] | None:
-    """Show a day picker using choose from list."""
-    current_names = [DAY_NAMES[i] for i in current_days]
-    default_items = ", ".join(f'"{n}"' for n in current_names)
-    all_items = ", ".join(f'"{n}"' for n in DAY_NAMES)
-    try:
-        result = subprocess.run(
-            ["osascript", "-e",
-             f'choose from list {{{all_items}}} '
-             f'with title "Active Days" '
-             f'with prompt "Select active days (Cmd+click for multiple):" '
-             f'default items {{{default_items}}} '
-             f'with multiple selections allowed'],
-            capture_output=True, text=True, timeout=120,
-        )
-        if result.returncode != 0 or result.stdout.strip() == "false":
-            return None
-        chosen = [s.strip() for s in result.stdout.strip().split(", ")]
-        return [i for i, name in enumerate(DAY_NAMES) if name in chosen]
-    except Exception:
-        return None
+df = ttk.Frame(sf); df.pack(fill="x", padx=20, pady=(10,5))
+ttk.Label(df, text="Active days:", anchor="w").pack(anchor="w")
+dr = ttk.Frame(df); dr.pack(fill="x", pady=(3,0))
+day_vars = []
+for i, name in enumerate(DAY_NAMES):
+    v = BooleanVar(value=i in cfg["schedule_days"]); day_vars.append(v)
+    ttk.Checkbutton(dr, text=name, variable=v).pack(side="left", padx=(0,6))
 
+# --- Timing ---
+tmf = ttk.LabelFrame(win, text="Timing", padding=10)
+tmf.pack(fill="x", padx=15, pady=5)
 
-def _build_summary(cfg) -> str:
-    from jitter import startup
-    days_str = ", ".join(DAY_NAMES[i] for i in cfg["schedule_days"])
-    schedule_status = "ON" if cfg["schedule_enabled"] else "OFF"
-    login_status = "ON" if startup.is_enabled() else "OFF"
-    return (
-        f"Current settings:\\n\\n"
-        f"Launch at login: {login_status}\\n"
-        f"Schedule: {schedule_status}\\n"
-        f"Active hours: {cfg['schedule_start']} – {cfg['schedule_end']}\\n"
-        f"Active days: {days_str}\\n"
-        f"Pulse interval: {cfg['pulse_interval'] // 60} min\\n"
-        f"AFK threshold: {cfg['afk_threshold'] // 60} min\\n"
-        f"AFK skip: {cfg['afk_skip'] // 60} min"
-    )
+pf = ttk.Frame(tmf); pf.pack(fill="x", padx=5, pady=(0,5))
+ttk.Label(pf, text="Pulse interval:", width=16, anchor="w").pack(side="left")
+pulse_var = IntVar(value=cfg["pulse_interval"]//60)
+ttk.Spinbox(pf, from_=1, to=15, width=4, textvariable=pulse_var).pack(side="left")
+ttk.Label(pf, text="minutes").pack(side="left", padx=(5,0))
 
+af = ttk.Frame(tmf); af.pack(fill="x", padx=5, pady=(0,5))
+ttk.Label(af, text="AFK threshold:", width=16, anchor="w").pack(side="left")
+afk_var = IntVar(value=cfg["afk_threshold"]//60)
+ttk.Spinbox(af, from_=5, to=180, width=4, textvariable=afk_var, increment=5).pack(side="left")
+ttk.Label(af, text="minutes").pack(side="left", padx=(5,0))
 
-def show_macos():
-    cfg = _load()
+skf = ttk.Frame(tmf); skf.pack(fill="x", padx=5, pady=(0,5))
+ttk.Label(skf, text="AFK skip:", width=16, anchor="w").pack(side="left")
+skip_var = IntVar(value=cfg["afk_skip"]//60)
+ttk.Spinbox(skf, from_=1, to=30, width=4, textvariable=skip_var).pack(side="left")
+ttk.Label(skf, text="minutes").pack(side="left", padx=(5,0))
 
-    while True:
-        menu_text = _build_summary(cfg)
-        try:
-            result = subprocess.run(
-                ["osascript", "-e",
-                 f'display dialog "{menu_text}" '
-                 f'with title "Jitter Settings" '
-                 f'buttons {{"Edit Timing", "Edit Schedule", "General"}} '
-                 f'default button "General"'],
-                capture_output=True, text=True, timeout=300,
-            )
-        except Exception:
-            return
+# --- Note ---
+nf = ttk.Frame(win); nf.pack(fill="x", padx=15, pady=(5,0))
+ttk.Label(nf, text="Screensavers and display sleep may be prevented\nwhile Jitter is actively pulsing.",
+    foreground="gray", justify="center").pack()
 
-        if result.returncode != 0:
-            return
+# --- Buttons ---
+bf = ttk.Frame(win); bf.pack(pady=15)
 
-        output = result.stdout.strip()
+def on_save():
+    new = {
+        "schedule_enabled": sched_var.get(),
+        "schedule_start": f"{start_h.get()}:{start_m.get()}",
+        "schedule_end": f"{end_h.get()}:{end_m.get()}",
+        "schedule_days": [i for i,v in enumerate(day_vars) if v.get()],
+        "pulse_interval": max(60, pulse_var.get()*60),
+        "afk_threshold": max(300, afk_var.get()*60),
+        "afk_skip": max(60, skip_var.get()*60),
+        "launch_at_login": cfg.get("launch_at_login", False),
+    }
+    save(new)
+    messagebox.showinfo("Jitter", "Settings saved.\n\nQuit & reopen the app for the new settings to take effect.", parent=win)
+    win.destroy()
 
-        if "General" in output:
-            _edit_general(cfg)
-        elif "Edit Schedule" in output:
-            _edit_schedule(cfg)
-        elif "Edit Timing" in output:
-            _edit_timing(cfg)
-        else:
-            return
-
-
-def _edit_general(cfg):
-    from jitter import startup
-    current = "ON" if startup.is_enabled() else "OFF"
-    try:
-        result = subprocess.run(
-            ["osascript", "-e",
-             f'display dialog "Launch at login is currently {current}.\\n\\n'
-             f'When enabled, Jitter will start automatically when you log in." '
-             f'with title "General" '
-             f'buttons {{"Cancel", "Toggle Launch at Login"}} '
-             f'default button "Toggle Launch at Login"'],
-            capture_output=True, text=True, timeout=120,
-        )
-        if result.returncode != 0:
-            return
-
-        if "Toggle" in result.stdout:
-            if startup.is_enabled():
-                startup.disable()
-                cfg["launch_at_login"] = False
-                new_status = "OFF"
-            else:
-                startup.enable()
-                cfg["launch_at_login"] = True
-                new_status = "ON"
-            _save(cfg)
-            _osa(f'display dialog "Launch at login is now {new_status}." '
-                 f'with title "Jitter" buttons {{"OK"}} default button "OK"')
-    except Exception:
-        pass
-
-
-def _edit_schedule(cfg):
-    # Toggle schedule on/off
-    current = "ON" if cfg["schedule_enabled"] else "OFF"
-    try:
-        result = subprocess.run(
-            ["osascript", "-e",
-             f'display dialog "Schedule is currently {current}." '
-             f'with title "Schedule" '
-             f'buttons {{"Cancel", "Toggle ON/OFF", "Edit Hours & Days"}} '
-             f'default button "Edit Hours & Days"'],
-            capture_output=True, text=True, timeout=120,
-        )
-        if result.returncode != 0:
-            return
-
-        output = result.stdout.strip()
-
-        if "Toggle" in output:
-            cfg["schedule_enabled"] = not cfg["schedule_enabled"]
-            _save(cfg)
-            status = "ON" if cfg["schedule_enabled"] else "OFF"
-            _osa(f'display dialog "Schedule is now {status}.\\n\\nQuit & reopen the app for changes to take effect." '
-                 f'with title "Jitter" buttons {{"OK"}} default button "OK"')
-
-        elif "Edit Hours" in output:
-            # Edit start time
-            val = _osa_input("Start Time", "Enter start time (HH:MM):", cfg["schedule_start"])
-            if val and ":" in val:
-                cfg["schedule_start"] = val
-
-            # Edit end time
-            val = _osa_input("End Time", "Enter end time (HH:MM):", cfg["schedule_end"])
-            if val and ":" in val:
-                cfg["schedule_end"] = val
-
-            # Edit days
-            days = _osa_choose_days(cfg["schedule_days"])
-            if days is not None:
-                cfg["schedule_days"] = days
-
-            _save(cfg)
-            _osa('display dialog "Schedule updated.\\n\\nQuit & reopen the app for changes to take effect." '
-                 'with title "Jitter" buttons {"OK"} default button "OK"')
-
-    except Exception:
-        pass
-
-
-def _edit_timing(cfg):
-    # Pulse interval
-    val = _osa_input("Pulse Interval",
-                     "Minutes between F15 keypresses (1-15):",
-                     str(cfg["pulse_interval"] // 60))
-    if val:
-        try:
-            mins = int(val)
-            cfg["pulse_interval"] = max(60, min(900, mins * 60))
-        except ValueError:
-            pass
-
-    # AFK threshold
-    val = _osa_input("AFK Threshold",
-                     "Minutes of idle before triggering skip (5-180):",
-                     str(cfg["afk_threshold"] // 60))
-    if val:
-        try:
-            mins = int(val)
-            cfg["afk_threshold"] = max(300, min(10800, mins * 60))
-        except ValueError:
-            pass
-
-    # AFK skip
-    val = _osa_input("AFK Skip Duration",
-                     "Minutes to wait during AFK skip (1-30):",
-                     str(cfg["afk_skip"] // 60))
-    if val:
-        try:
-            mins = int(val)
-            cfg["afk_skip"] = max(60, min(1800, mins * 60))
-        except ValueError:
-            pass
-
-    _save(cfg)
-    _osa('display dialog "Timing updated.\\n\\nQuit & reopen the app for changes to take effect." '
-         'with title "Jitter" buttons {"OK"} default button "OK"')
+ttk.Button(bf, text="Save", width=10, command=on_save).pack(side="left", padx=5)
+ttk.Button(bf, text="Cancel", width=10, command=win.destroy).pack(side="left", padx=5)
+win.protocol("WM_DELETE_WINDOW", win.destroy)
+win.mainloop()
+''')
 
 
 def show():
-    if platform.system() == "Darwin":
-        show_macos()
-    else:
-        from jitter.settings_ui import show as show_tk
-        show_tk()
+    # Launch tkinter settings as a standalone python3 process
+    # This works on both macOS and Windows, and avoids the main-thread
+    # restriction since the subprocess owns its own main thread.
+    python = "python3" if platform.system() == "Darwin" else sys.executable
+    subprocess.Popen(
+        [python, "-c", _TK_SCRIPT],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )

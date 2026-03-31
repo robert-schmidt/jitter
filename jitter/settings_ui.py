@@ -124,8 +124,8 @@ def show():
     note_frame.pack(fill="x", padx=15, pady=(5, 0))
     ttk.Label(
         note_frame,
-        text="Note: F15 keypresses generally do not prevent\n"
-             "screensavers or display sleep from activating.",
+        text="Note: Screensavers and display sleep may be\n"
+             "prevented while Jitter is actively pulsing.",
         foreground="gray", justify="center",
     ).pack()
 
