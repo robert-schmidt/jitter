@@ -6,6 +6,8 @@ from pystray import MenuItem
 
 from jitter import icons, heartbeat, idle
 
+_refresh_timer: threading.Timer | None = None
+
 
 def _format_idle() -> str:
     secs = int(idle.idle_seconds())
@@ -27,7 +29,11 @@ def _toggle(icon: pystray.Icon, _item: MenuItem):
 
 
 def _quit(icon: pystray.Icon, _item: MenuItem):
+    global _refresh_timer
     heartbeat.stop()
+    if _refresh_timer is not None:
+        _refresh_timer.cancel()
+        _refresh_timer = None
     icon.stop()
 
 
@@ -39,24 +45,34 @@ def _status_text(_item: MenuItem) -> str:
     return f"● Active (idle {_format_idle()})"
 
 
+# Track last icon state to avoid redundant reassignment
+_last_state: str | None = None
+
+
 def _update_icon(icon: pystray.Icon):
+    global _last_state
     if not heartbeat.is_running():
-        icon.icon = icons.paused_icon()
+        state = "paused"
     elif heartbeat.is_skipping():
-        icon.icon = icons.skipping_icon()
+        state = "skipping"
     else:
-        icon.icon = icons.active_icon()
+        state = "active"
+
+    if state != _last_state:
+        _last_state = state
+        icon.icon = {"active": icons.active_icon, "skipping": icons.skipping_icon, "paused": icons.paused_icon}[state]()
 
 
 def _refresh_loop(icon: pystray.Icon):
+    global _refresh_timer
     try:
         _update_icon(icon)
         icon.update_menu()
     except Exception:
         pass
-    timer = threading.Timer(10, _refresh_loop, args=[icon])
-    timer.daemon = True
-    timer.start()
+    _refresh_timer = threading.Timer(10, _refresh_loop, args=[icon])
+    _refresh_timer.daemon = True
+    _refresh_timer.start()
 
 
 def _on_setup(icon: pystray.Icon):
