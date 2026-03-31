@@ -19,9 +19,7 @@ Jitter is a small, peaceful act of resistance. It presses a key that does nothin
 
 ### Why not just Amphetamine?
 
-Good question. Amphetamine is a great app — until your IT department decides it isn't. Many corporate-managed Macs block or restrict third-party "keep awake" tools through MDM profiles, endpoint protection, or app whitelists. One day it works, the next day it doesn't, and nobody tells you why. 🤷
-
-Jitter takes a different approach. It's not an app from the App Store that can be flagged and blocked. It's a tiny, self-contained binary that simulates normal user activity — the same kind of input that happens when you're actually at your desk. There's nothing to block because there's nothing unusual happening.
+Amphetamine is a great app, but it stopped working on my Mac one day and I have no idea why. 🤷 So I built this.
 
 ## How It Works
 
