@@ -4,7 +4,7 @@ import threading
 import pystray
 from pystray import MenuItem
 
-from jitter import icons, heartbeat, idle, dialogs, config, settings_native
+from jitter import icons, heartbeat, idle, dialogs, config, settings_native, startup
 
 _refresh_timer: threading.Timer | None = None
 
@@ -39,6 +39,10 @@ def _toggle(icon: pystray.Icon, _item: MenuItem):
     else:
         heartbeat.start()
         icon.icon = icons.active_icon()
+
+
+def _toggle_startup(icon: pystray.Icon, _item: MenuItem):
+    startup.set_enabled(not startup.is_enabled())
 
 
 def _open_settings(icon: pystray.Icon, _item: MenuItem):
@@ -125,6 +129,10 @@ def run():
                 _toggle,
             ),
             MenuItem("Settings", _open_settings),
+            MenuItem(
+                lambda _: "✓ Launch at Login" if startup.is_enabled() else "  Launch at Login",
+                _toggle_startup,
+            ),
             MenuItem("About", _about),
             pystray.Menu.SEPARATOR,
             MenuItem("Quit", _quit),

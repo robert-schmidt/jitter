@@ -17,6 +17,12 @@ If your organization tracks green dots instead of outcomes, the problem isn't th
 
 Jitter is a small, peaceful act of resistance. It presses a key that does nothing, so you can do the things that matter.
 
+### Why not just Amphetamine?
+
+Good question. Amphetamine is a great app — until your IT department decides it isn't. Many corporate-managed Macs block or restrict third-party "keep awake" tools through MDM profiles, endpoint protection, or app whitelists. One day it works, the next day it doesn't, and nobody tells you why. 🤷
+
+Jitter takes a different approach. It's not an app from the App Store that can be flagged and blocked. It's a tiny, self-contained binary that simulates normal user activity — the same kind of input that happens when you're actually at your desk. There's nothing to block because there's nothing unusual happening.
+
 ## How It Works
 
 - Every **3 minutes** (configurable), Jitter sends an **F15 keypress** and runs `caffeinate -u` on macOS to reset the system idle timer. F15 alone doesn't reset HIDIdleTime (which Teams checks), so both are used together.
