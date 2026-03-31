@@ -1,5 +1,7 @@
-"""Timer loop that sends periodic keypresses to prevent idle status."""
+"""Timer loop that sends periodic keypresses and caffeinate to prevent idle status."""
 
+import platform
+import subprocess
 import time
 import threading
 from datetime import datetime
@@ -7,6 +9,7 @@ from pynput.keyboard import Key, Controller
 from jitter import idle, config
 
 _keyboard = Controller()
+_caffeinate_proc: subprocess.Popen | None = None
 _lock = threading.Lock()
 _timer: threading.Timer | None = None
 _running = False
@@ -15,6 +18,27 @@ _outside_schedule = False
 _next_pulse: float = 0
 
 SCHEDULE_CHECK = 30  # re-check schedule every 30s when outside window
+
+
+def _poke_caffeinate(duration: int):
+    """On macOS, use caffeinate -u to assert user activity for the given duration.
+    This resets IOKit HIDIdleTime, which is what Teams actually checks."""
+    global _caffeinate_proc
+    if platform.system() != "Darwin":
+        return
+    # Kill any existing caffeinate before starting a new one
+    if _caffeinate_proc is not None:
+        try:
+            _caffeinate_proc.kill()
+        except OSError:
+            pass
+    try:
+        _caffeinate_proc = subprocess.Popen(
+            ["caffeinate", "-u", "-t", str(duration + 30)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        pass
 
 
 def _is_within_schedule() -> bool:
@@ -65,6 +89,7 @@ def _tick():
             _skipping = False
             _keyboard.press(Key.f15)
             _keyboard.release(Key.f15)
+            _poke_caffeinate(interval)
             _next_pulse = time.time() + interval
             _timer = threading.Timer(interval, _tick)
 
@@ -82,13 +107,19 @@ def start():
 
 
 def stop():
-    global _running, _timer, _next_pulse
+    global _running, _timer, _next_pulse, _caffeinate_proc
     with _lock:
         _running = False
         _next_pulse = 0
         if _timer is not None:
             _timer.cancel()
             _timer = None
+        if _caffeinate_proc is not None:
+            try:
+                _caffeinate_proc.kill()
+            except OSError:
+                pass
+            _caffeinate_proc = None
 
 
 def is_running() -> bool:

@@ -2,6 +2,7 @@
 
 ## v1.1.0 — 2026-03-31
 
+- **Fix: Teams actually stays active now** — added `caffeinate -u` alongside F15 keypresses on macOS. F15 via pynput doesn't reset HIDIdleTime (which Teams checks), but `caffeinate -u` does. Both are now used together.
 - **Launch at login** — optional setting to start Jitter automatically on login (default: off)
   - macOS: creates a LaunchAgent in `~/Library/LaunchAgents/`
   - Windows: adds a registry key in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`

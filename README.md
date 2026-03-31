@@ -19,11 +19,12 @@ Jitter is a small, peaceful act of resistance. It presses a key that does nothin
 
 ## How It Works
 
-- Every **3 minutes** (configurable), Jitter sends an **F15 keypress** — a key that exists on no modern keyboard and has zero side effects on any OS. It's enough to reset idle timers without interfering with anything.
-- After **60 minutes** of no real keyboard input (configurable), Jitter inserts a **10-minute skip** (configurable) before the next keypress to look more like natural human activity. After the skip, the idle counter resets and the cycle repeats.
+- Every **3 minutes** (configurable), Jitter sends an **F15 keypress** and runs `caffeinate -u` on macOS to reset the system idle timer. F15 alone doesn't reset HIDIdleTime (which Teams checks), so both are used together.
+- After **60 minutes** of no real keyboard input (configurable), Jitter inserts a **10-minute skip** (configurable) before the next pulse to look more like natural human activity. After the skip, the idle counter resets and the cycle repeats.
 - **Schedule support** — set active hours (default 09:00–18:00, weekdays) so Jitter only runs during work time. Outside the schedule, it sleeps and the icon turns gray.
+- **Launch at login** — optional setting to start Jitter automatically (default: off).
 - Everything runs in the **system tray** — no windows, no dock icon, no distractions.
-- **Screensavers and display sleep** are generally not affected — simulated F15 keypresses via `pynput` don't reset macOS's HIDIdleTime, so your screen will still lock and sleep normally.
+- **Note on screensavers:** `caffeinate -u` asserts user activity to the OS, which will prevent display sleep and screensaver activation while Jitter is actively pulsing. Outside the schedule or when paused, the system behaves normally.
 
 ### Tray Menu
 
