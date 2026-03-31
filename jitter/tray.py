@@ -42,7 +42,10 @@ def _toggle(icon: pystray.Icon, _item: MenuItem):
 
 
 def _open_settings(icon: pystray.Icon, _item: MenuItem):
-    settings_ui.show()
+    # tkinter must run in its own process on macOS — pystray owns the main thread
+    import multiprocessing
+    p = multiprocessing.Process(target=settings_ui.show, daemon=True)
+    p.start()
 
 
 def _about(icon: pystray.Icon, _item: MenuItem):
