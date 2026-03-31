@@ -1,20 +1,32 @@
 """Check and request macOS permissions. No-op on other platforms."""
 
+import os
 import platform
 import subprocess
 
+# Marker file so we only show the permission hint once
+_MARKER = os.path.join(os.path.expanduser("~"), ".jitter_permissions_prompted")
 
-def _is_trusted() -> bool:
-    """Check accessibility permission without triggering a prompt."""
+
+def _already_prompted() -> bool:
+    return os.path.exists(_MARKER)
+
+
+def _mark_prompted():
     try:
-        from ApplicationServices import AXIsProcessTrusted
-        return AXIsProcessTrusted()
-    except ImportError:
-        return True
+        open(_MARKER, "w").close()
+    except OSError:
+        pass
 
 
-def _prompt_accessibility():
-    """Trigger the macOS accessibility permission prompt."""
+def check_all():
+    """Show permission guidance on first launch only (macOS)."""
+    if platform.system() != "Darwin":
+        return
+    if _already_prompted():
+        return
+
+    # First launch — trigger the system accessibility prompt and show guidance
     try:
         from ApplicationServices import AXIsProcessTrustedWithOptions
         from Foundation import NSDictionary
@@ -25,17 +37,6 @@ def _prompt_accessibility():
     except ImportError:
         pass
 
-
-def check_all() -> bool:
-    """Run permission checks at startup. Returns True to continue launch."""
-    if platform.system() != "Darwin":
-        return True
-
-    if _is_trusted():
-        return True
-
-    # Not trusted — trigger the system prompt and show guidance
-    _prompt_accessibility()
     try:
         subprocess.run(
             ["osascript", "-e",
@@ -51,4 +52,5 @@ def check_all() -> bool:
         )
     except Exception:
         pass
-    return False
+
+    _mark_prompted()
