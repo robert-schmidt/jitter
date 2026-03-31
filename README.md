@@ -64,14 +64,17 @@ Settings are saved to `~/.jitter/config.json` and persist across restarts.
 
 ## Install & Run
 
-Requires Python 3.11+ and Git.
+Requires Python 3.11+, Git, and `cliclick` (macOS).
 
 ```bash
+brew install cliclick
 git clone https://github.com/robert-schmidt/jitter.git
 cd jitter
 pip install -r requirements.txt
 python -m jitter.main
 ```
+
+> **Note:** `cliclick` is a native macOS tool for simulating mouse/keyboard events. It's the most reliable method for resetting the system idle timer. The pre-built `.app` bundle includes it automatically.
 
 ### One-liner (macOS)
 
