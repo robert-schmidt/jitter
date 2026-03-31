@@ -10,7 +10,7 @@ build-mac:
 		--osx-bundle-identifier com.jitter.app \
 		--hidden-import pynput.keyboard._darwin \
 		--hidden-import pynput.mouse._darwin \
-		jitter/main.py
+		run.py
 
 build-win:
 	pyinstaller \
@@ -19,7 +19,7 @@ build-win:
 		--windowed \
 		--hidden-import pynput.keyboard._win32 \
 		--hidden-import pynput.mouse._win32 \
-		jitter/main.py
+		run.py
 
 clean:
 	rm -rf build dist *.spec
