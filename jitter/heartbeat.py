@@ -103,6 +103,27 @@ def _simulate_fallback():
         pass
 
 
+def _verify_idle_reset():
+    """Check actual system idle time after pulsing. If it's high, our events aren't landing."""
+    if platform.system() != "Darwin":
+        return
+    try:
+        from Quartz import (
+            CGEventSourceSecondsSinceLastEventType,
+            kCGEventSourceStateCombinedSessionState,
+            kCGAnyInputEventType,
+        )
+        sys_idle = CGEventSourceSecondsSinceLastEventType(
+            kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType
+        )
+        if sys_idle < 2.0:
+            _log.debug("VERIFY: system idle %.1fs — events ARE landing", sys_idle)
+        else:
+            _log.warning("VERIFY: system idle %.1fs — events NOT landing! Accessibility may not be working.", sys_idle)
+    except Exception as e:
+        _log.debug("VERIFY: could not check - %s", e)
+
+
 def _poke_caffeinate(duration: int):
     global _caffeinate_proc
     if platform.system() != "Darwin":
@@ -171,6 +192,9 @@ def _tick():
             _log.debug("TICK: pulsing (idle %.0fs, interval %ds)", idle.idle_seconds(), interval)
             _simulate_activity()
             _poke_caffeinate(interval)
+            # Verify: did we actually reset the system idle timer?
+            time.sleep(0.2)
+            _verify_idle_reset()
             _next_pulse = time.time() + interval
             _timer = threading.Timer(interval, _tick)
 

@@ -77,22 +77,6 @@ Clone, build, and install to Applications in one shot:
 git clone https://github.com/robert-schmidt/jitter.git /tmp/jitter && cd /tmp/jitter && pip install -r requirements.txt && make build-mac && cp -r dist/Jitter.app /Applications/ && open /Applications/Jitter.app
 ```
 
-### Corporate Mac (no admin / can't grant Accessibility)
-
-If you can't grant Accessibility permission to Jitter.app (MDM-managed Mac, no persistent admin), use the standalone shell script instead. It runs through Terminal, which typically already has Accessibility:
-
-```bash
-curl -sO https://raw.githubusercontent.com/robert-schmidt/jitter/main/jitter.sh && chmod +x jitter.sh && ./jitter.sh
-```
-
-Or just paste this one-liner directly into Terminal:
-
-```bash
-while true; do osascript -e 'tell application "System Events" to key code 56' 2>/dev/null && echo "$(date '+%H:%M:%S') pulse"; sleep 120; done
-```
-
-> **Note:** If Terminal doesn't have Accessibility either, go to System Settings → Privacy & Security → Accessibility and add Terminal.app. This usually doesn't require admin on most corporate setups.
-
 ## Platform Setup
 
 ### macOS
