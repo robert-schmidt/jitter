@@ -2,6 +2,9 @@
 
 A tiny system tray app that keeps Microsoft Teams (and other apps) from marking you as "Away."
 
+[![GitHub](https://img.shields.io/github/v/release/robert-schmidt/jitter)](https://github.com/robert-schmidt/jitter/releases)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow)](https://buymeacoffee.com/robbschmidt)
+
 ## Why This Exists
 
 Modern workplace surveillance has gone too far.
@@ -81,6 +84,20 @@ jitter/
 ├── requirements.txt
 └── README.md
 ```
+
+## About
+
+Jitter was built out of frustration with workplace tools that equate "online" with "working." It's less than 200 lines of Python, has no dependencies beyond the tray and input libraries, needs no config files, and does exactly one thing well.
+
+It doesn't touch your network, doesn't phone home, doesn't collect data. It lives in your menu bar, presses a ghost key, and minds its own business — the way your employer should.
+
+**Source:** [github.com/robert-schmidt/jitter](https://github.com/robert-schmidt/jitter)
+
+## Support
+
+If Jitter saved you from one more "why were you Away?" conversation, consider buying me a coffee:
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-☕-yellow?style=for-the-badge)](https://buymeacoffee.com/robbschmidt)
 
 ## License
 
