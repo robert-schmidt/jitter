@@ -5,10 +5,12 @@ import subprocess
 import time
 import threading
 from datetime import datetime
-from pynput.keyboard import Key, Controller
+from pynput.keyboard import Key, Controller as KBController
+from pynput.mouse import Controller as MouseController
 from jitter import idle, config
 
-_keyboard = Controller()
+_keyboard = KBController()
+_mouse = MouseController()
 _caffeinate_proc: subprocess.Popen | None = None
 _lock = threading.Lock()
 _timer: threading.Timer | None = None
@@ -87,8 +89,19 @@ def _tick():
             if _skipping:
                 idle.reset()
             _skipping = False
+            # Triple approach to reset all idle detectors:
+            # 1. F15 keypress (invisible key, no side effects)
             _keyboard.press(Key.f15)
             _keyboard.release(Key.f15)
+            # 2. Mouse nudge (1px right then back — registers as Quartz event,
+            #    which is what Teams actually checks via CGEventSource)
+            try:
+                pos = _mouse.position
+                _mouse.move(1, 0)
+                _mouse.move(-1, 0)
+            except Exception:
+                pass
+            # 3. caffeinate -u (resets IOKit HIDIdleTime)
             _poke_caffeinate(interval)
             _next_pulse = time.time() + interval
             _timer = threading.Timer(interval, _tick)
