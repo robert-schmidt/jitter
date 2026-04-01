@@ -19,9 +19,10 @@ def check_all():
     try:
         subprocess.run(
             ["osascript", "-e",
-             'display dialog "Jitter works best with Accessibility permission '
-             'in System Settings → Privacy & Security → Accessibility.\\n\\n'
-             'Without it, some activity simulation methods may not work." '
+             'display dialog "Jitter needs these permissions in System Settings → Privacy & Security:\\n\\n'
+             '1. Accessibility — for simulating input\\n'
+             '2. Automation → System Events — for sending keystrokes\\n\\n'
+             'Grant both, then relaunch." '
              'with title "Jitter" '
              'buttons {"OK"} default button "OK" with icon note'],
             capture_output=True, timeout=10,
