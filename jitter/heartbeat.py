@@ -134,15 +134,7 @@ def _simulate_macos():
     except Exception as e:
         _log.debug("CGEvent: FAILED - %s", e)
 
-    # METHOD 4: pynput fallback
-    try:
-        from pynput.keyboard import Key, Controller
-        kb = Controller()
-        kb.press(Key.f15)
-        kb.release(Key.f15)
-        _log.debug("pynput: F15 sent")
-    except Exception as e:
-        _log.debug("pynput: FAILED - %s", e)
+    # pynput removed — crashes on macOS Tahoe (EXC_BREAKPOINT in backend)
 
 
 def _simulate_fallback():

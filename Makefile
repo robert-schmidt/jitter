@@ -10,8 +10,7 @@ build-mac:
 		--name Jitter \
 		--windowed \
 		--osx-bundle-identifier com.jitter.app \
-		--hidden-import pynput.keyboard._darwin \
-		--hidden-import pynput.mouse._darwin \
+		--exclude-module pynput \
 		run.py
 	@# Copy cliclick alongside the .app (not inside — avoids signature issues)
 	cp "$$(which cliclick)" dist/cliclick
