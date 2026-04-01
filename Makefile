@@ -12,9 +12,6 @@ build-mac:
 		--osx-bundle-identifier com.jitter.app \
 		--exclude-module pynput \
 		run.py
-	@# Copy cliclick alongside the .app (not inside — avoids signature issues)
-	cp "$$(which cliclick)" dist/cliclick
-	@echo "cliclick copied to dist/cliclick (bundled alongside Jitter.app)"
 
 build-win:
 	pyinstaller \
