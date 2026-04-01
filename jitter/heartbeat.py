@@ -25,7 +25,7 @@ SCHEDULE_CHECK = 30
 _log_path = os.path.join(os.path.expanduser("~"), ".jitter", "debug.log")
 os.makedirs(os.path.dirname(_log_path), exist_ok=True)
 _log = logging.getLogger("jitter.heartbeat")
-_log.setLevel(logging.DEBUG)
+_log.setLevel(logging.WARNING)
 _fh = logging.FileHandler(_log_path, mode="a")
 _fh.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
 _log.addHandler(_fh)
