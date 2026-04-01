@@ -10,8 +10,13 @@ build-mac:
 		--name Jitter \
 		--windowed \
 		--osx-bundle-identifier com.jitter.app \
+		--icon assets/Jitter.icns \
 		--exclude-module pynput \
 		run.py
+	@# Hide dock icon — app lives in menu bar only
+	/usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" dist/Jitter.app/Contents/Info.plist 2>/dev/null || \
+	/usr/libexec/PlistBuddy -c "Set :LSUIElement true" dist/Jitter.app/Contents/Info.plist
+	@echo "Dock icon hidden (LSUIElement=true)"
 
 build-win:
 	pyinstaller \
