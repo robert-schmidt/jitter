@@ -138,26 +138,30 @@ Check the [Releases](https://github.com/robert-schmidt/jitter/releases) page for
 ```
 jitter/
 ├── jitter/
-│   ├── main.py          — entry point, permission check
-│   ├── tray.py          — system tray setup and menu
-│   ├── heartbeat.py     — F15 timer loop with AFK skip logic
-│   ├── idle.py          — monitors real keyboard input
-│   ├── icons.py         — generates tray icons (green/amber/gray circles)
-│   ├── dialogs.py       — About window (with GitHub link) and quit confirmation
-│   ├── permissions.py   — macOS permission checks (tests actual keypress/listener)
-│   ├── config.py        — persistent settings (~/.jitter/config.json)
-│   └── settings_ui.py   — Settings window with schedule and timing controls
-├── run.py               — PyInstaller entry point (outside package)
-├── Makefile             — build targets for macOS and Windows
+│   ├── main.py              — entry point, permission check
+│   ├── tray.py              — system tray setup and menu
+│   ├── heartbeat.py         — activity simulation (cliclick, osascript, CGEvent)
+│   ├── idle.py              — idle detection via CGEventSource
+│   ├── icons.py             — generates tray icons (green/amber/gray circles)
+│   ├── dialogs.py           — About window and quit confirmation
+│   ├── permissions.py       — macOS permission checks
+│   ├── config.py            — persistent settings (~/.jitter/config.json)
+│   ├── settings_native.py   — Settings dialogs (osascript on macOS)
+│   ├── startup.py           — launch at login (LaunchAgent / registry)
+│   └── settings_ui.py       — Settings window (tkinter, Windows fallback)
+├── assets/                  — app icon source files
+├── run.py                   — PyInstaller entry point
+├── Makefile                 — build targets for macOS and Windows
 ├── requirements.txt
+├── CHANGELOG.md
 └── README.md
 ```
 
 ## About
 
-Jitter was built out of frustration with workplace tools that equate "online" with "working." It's about 200 lines of Python, has no dependencies beyond the tray and input libraries, needs no config files, and does exactly one thing well.
+Jitter was built out of frustration with workplace tools that equate "online" with "working." It's about 1,100 lines of Python, runs entirely in the menu bar (no dock icon), and does exactly one thing well.
 
-It doesn't touch your network, doesn't phone home, doesn't collect data. It lives in your menu bar, presses a ghost key, and minds its own business — the way your employer should.
+It doesn't touch your network, doesn't phone home, doesn't collect data. It lives in your menu bar, simulates natural activity, and minds its own business — the way your employer should.
 
 **Source:** [github.com/robert-schmidt/jitter](https://github.com/robert-schmidt/jitter)
 

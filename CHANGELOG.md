@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3.0 — 2026-04-01
+
+- **Custom app icon** — green dot with pulse rings on dark background
+- **No dock icon** — Jitter runs entirely in the menu bar (LSUIElement)
+- **pynput removed from macOS build** — was crashing on macOS Tahoe (EXC_BREAKPOINT). macOS now uses cliclick, osascript, and Quartz CGEvent only
+- **Auto-install cliclick** — if cliclick isn't found and Homebrew is available, Jitter installs it automatically on first run
+- Updated README with current project structure and line count
+
 ## v1.2.0 — 2026-03-31
 
 **This release fixes the core issue: Teams should actually stay active now.**
