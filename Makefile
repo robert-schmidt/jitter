@@ -17,6 +17,9 @@ build-mac:
 	/usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" dist/Jitter.app/Contents/Info.plist 2>/dev/null || \
 	/usr/libexec/PlistBuddy -c "Set :LSUIElement true" dist/Jitter.app/Contents/Info.plist
 	@echo "Dock icon hidden (LSUIElement=true)"
+	@# Re-sign after plist modification (otherwise signature is invalid → "damaged" on other Macs)
+	codesign --force --deep --sign - dist/Jitter.app
+	@echo "Ad-hoc re-signed"
 
 build-win:
 	pyinstaller \
