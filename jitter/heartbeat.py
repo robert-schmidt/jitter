@@ -25,7 +25,7 @@ SCHEDULE_CHECK = 30
 _log_path = os.path.join(os.path.expanduser("~"), ".jitter", "debug.log")
 os.makedirs(os.path.dirname(_log_path), exist_ok=True)
 _log = logging.getLogger("jitter.heartbeat")
-_log.setLevel(logging.WARNING)
+_log.setLevel(logging.DEBUG)
 _fh = logging.FileHandler(_log_path, mode="a")
 _fh.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
 _log.addHandler(_fh)
@@ -78,12 +78,16 @@ def _simulate_macos():
     if _cliclick:
         try:
             # Move mouse in a natural pattern using relative movements
-            subprocess.run(
+            # Note: cliclick kp: only supports named keys (f1-f16, space, etc.), not modifiers
+            result = subprocess.run(
                 [_cliclick, f"m:+{dx},+0", f"m:+0,+{dy}", f"m:-{dx},-{dy}",
-                 "kp:shift", "kp:shift"],
-                capture_output=True, timeout=5,
+                 "kp:f15", "kp:f15"],
+                capture_output=True, text=True, timeout=5,
             )
-            _log.debug("cliclick: moved +%d,+%d and shift", dx, dy)
+            if result.returncode == 0:
+                _log.debug("cliclick: moved +%d,+%d and f15", dx, dy)
+            else:
+                _log.warning("cliclick: exit code %d stderr: %s", result.returncode, result.stderr.strip())
         except Exception as e:
             _log.debug("cliclick: FAILED - %s", e)
 
