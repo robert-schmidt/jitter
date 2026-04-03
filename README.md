@@ -30,12 +30,11 @@ Every **2 minutes** (configurable), Jitter fires multiple redundant methods to k
 | # | Method | What it does | Permission |
 |---|--------|-------------|------------|
 | 1 | **`IOHIDPostEvent`** | Posts a `NX_MOUSEMOVED` event directly to the IOKit HID kernel layer, resetting the real `HIDIdleTime` counter that many apps check. | Accessibility |
-| 2 | **`cliclick`** | Native C binary. Moves the mouse in a square pattern (30–80 px per axis, 300–700 ms random pauses between steps) then presses the invisible F15 key. Generates realistic CGEvent mouse-move events. Installed via `brew install cliclick`. | Accessibility |
-| 3 | **`IOPMAssertionDeclareUserActivity`** | Apple's power management API — tells macOS the user is active, equivalent to pressing a key. Resets the system idle timer and prevents display sleep. | **None** |
-| 4 | **Teams window activation** | Finds the running Microsoft Teams process and briefly activates its window via `NSRunningApplication`, then immediately switches back to your previous app (~150 ms). Teams receives a system activation event and resets its internal idle state. Only runs if Teams is open. | **None** |
-| 5 | **`caffeinate -u`** | Prevents system sleep for the duration of the pulse interval. | **None** |
+| 2 | **`IOPMAssertionDeclareUserActivity`** | Apple's power management API — tells macOS the user is active, equivalent to pressing a key. | None |
+| 3 | **Teams activation + input** | Finds the running Microsoft Teams process, activates its window, sends mouse moves (30–80 px, square pattern, 300–700 ms pauses) and an F15 keypress via `cliclick` **while Teams is focused**, then switches back to your previous app. Teams sees real input in its own window. Only runs if Teams is open. | Accessibility |
+| 4 | **`caffeinate -u -d -i`** | Prevents system sleep (`-u`), display sleep (`-d`), and idle sleep (`-i`) for the pulse interval. Keeps the screen on while Jitter is pulsing. Killed when entering AFK skip or outside schedule so the screen can turn off normally. | None |
 
-Methods 3–5 require **no permissions at all** and work on any Mac, including enterprise/corporate machines with strict security policies. Methods 1–2 provide deeper idle timer resets when Accessibility permission is available.
+Jitter requires **Accessibility** permission. On first launch without it, a dialog explains how to grant it. `cliclick` is installed automatically via Homebrew if missing, or can be installed manually with `brew install cliclick`.
 
 ### AFK behaviour
 
@@ -77,50 +76,40 @@ Settings are saved to `~/.jitter/config.json` and persist across restarts.
 
 ## Install & Run
 
-Requires Python 3.11+ and Git.
+Requires Python 3.11+, Git, and `cliclick` (macOS).
 
 ```bash
+brew install cliclick
 git clone https://github.com/robert-schmidt/jitter.git
 cd jitter
 pip install -r requirements.txt
 python -m jitter.main
 ```
 
-**Optional:** install `cliclick` for mouse movement simulation (method 2):
-```bash
-brew install cliclick
-```
-
-> **Note:** `cliclick` is a native macOS tool for simulating mouse/keyboard events. It enables method 2 (mouse moves + F15 keypress) but is not required — Jitter works without it using methods 3–5.
+> **Note:** `cliclick` is a native macOS tool for simulating mouse/keyboard events. It's auto-installed via Homebrew on first run if missing, but installing it upfront avoids the wait.
 
 ### One-liner (macOS)
 
 Clone, build, and install to Applications in one shot:
 
 ```bash
-git clone https://github.com/robert-schmidt/jitter.git /tmp/jitter && cd /tmp/jitter && pip install -r requirements.txt && make build-mac && cp -r dist/Jitter.app /Applications/ && open /Applications/Jitter.app
+brew install cliclick && git clone https://github.com/robert-schmidt/jitter.git /tmp/jitter && cd /tmp/jitter && pip install -r requirements.txt && make build-mac && cp -r dist/Jitter.app /Applications/ && open /Applications/Jitter.app
 ```
 
 ## Platform Setup
 
 ### macOS
 
-**Jitter works without any permissions** — methods 3–5 (DeclareUserActivity, Teams activation, caffeinate) need no grants at all and are enough to keep Teams active on most systems, including enterprise Macs.
+Jitter requires **Accessibility** permission. On first launch, if the permission is missing, a dialog will tell you how to grant it.
 
-For the full set of methods, grant the following in **System Settings → Privacy & Security**:
-
-| Permission | Required? | What it enables |
-|-----------|-----------|----------------|
-| **Accessibility** | Recommended | Enables `IOHIDPostEvent` (kernel idle reset) and `cliclick` (mouse movement simulation). Without this, methods 1–2 will log "FAILED" and only methods 3–5 will run. |
-| **Automation → System Events** | Not needed | Previously used for osascript keystroke sending. Removed in v1.3.3 — typically blocked by MDM on enterprise Macs anyway. |
-
-To grant Accessibility:
+To grant:
 1. Open **System Settings → Privacy & Security → Accessibility**
 2. Click **+**, navigate to `Jitter.app`, and add it
-3. If `cliclick` is installed via Homebrew, also add `/opt/homebrew/bin/cliclick`
-4. Relaunch Jitter
+3. Relaunch Jitter
 
-> **Note:** If running from source (not the `.app` bundle), grant permissions to your **terminal app** (Terminal, iTerm2, etc.) instead.
+No other permissions are needed. Automation / System Events is **not required**.
+
+> **Note:** If running from source (not the `.app` bundle), grant Accessibility to your **terminal app** (Terminal, iTerm2, etc.) instead.
 
 > **Tested on:** macOS Tahoe 26.3.1 (a) (25D771280a)
 
