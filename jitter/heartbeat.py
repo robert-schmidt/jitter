@@ -287,7 +287,8 @@ def _verify_idle_reset():
     if hid_idle is not None:
         parts.append(f"HIDIdle={hid_idle:.1f}s")
 
-    landed = (hid_idle is not None and hid_idle < 2.0) or (cg_idle is not None and cg_idle < 2.0)
+    # HIDIdle threshold is 5s because VERIFY runs ~3s after IOHIDPostEvent (cliclick with waits)
+    landed = (hid_idle is not None and hid_idle < 5.0) or (cg_idle is not None and cg_idle < 5.0)
     if landed:
         _log.debug("VERIFY: %s — events ARE landing", " ".join(parts))
     else:
