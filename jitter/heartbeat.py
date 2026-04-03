@@ -69,42 +69,103 @@ def _simulate_activity():
         _simulate_fallback()
 
 
+def _post_hid_event(dx: int, dy: int):
+    """Post a NX_MOUSEMOVED event via IOHIDPostEvent — resets the real HID idle timer.
+
+    CGEventPost, CGWarpMouseCursorPosition, and cliclick all use higher-level APIs
+    that do NOT reset IOHIDSystem's idle counter on newer macOS. This is the only
+    programmatic way to reset it without physical hardware input.
+    """
+    import ctypes
+    import struct
+
+    NX_MOUSEMOVED = 5
+
+    class NXEventData(ctypes.Structure):
+        _fields_ = [("data", (ctypes.c_uint8 * 64))]
+
+    class IOGPoint(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_int16), ("y", ctypes.c_int16)]
+
+    iokit = ctypes.cdll.LoadLibrary(
+        "/System/Library/Frameworks/IOKit.framework/IOKit")
+    libc = ctypes.cdll.LoadLibrary("/usr/lib/libSystem.B.dylib")
+
+    libc.mach_task_self.restype = ctypes.c_uint32
+    iokit.IOServiceMatching.restype = ctypes.c_void_p
+    iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
+    iokit.IOServiceGetMatchingService.restype = ctypes.c_uint32
+    iokit.IOServiceGetMatchingService.argtypes = [
+        ctypes.c_uint32, ctypes.c_void_p]
+    iokit.IOServiceOpen.restype = ctypes.c_int
+    iokit.IOServiceOpen.argtypes = [
+        ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32)]
+    iokit.IOHIDPostEvent.restype = ctypes.c_int
+    iokit.IOHIDPostEvent.argtypes = [
+        ctypes.c_uint32, ctypes.c_uint32, IOGPoint,
+        ctypes.POINTER(NXEventData), ctypes.c_uint32,
+        ctypes.c_uint32, ctypes.c_uint32]
+    iokit.IOServiceClose.restype = ctypes.c_int
+    iokit.IOServiceClose.argtypes = [ctypes.c_uint32]
+    iokit.IOObjectRelease.restype = ctypes.c_int
+    iokit.IOObjectRelease.argtypes = [ctypes.c_uint32]
+
+    service = iokit.IOServiceGetMatchingService(
+        0, iokit.IOServiceMatching(b"IOHIDSystem"))
+    if not service:
+        raise RuntimeError("IOHIDSystem service not found")
+
+    connect = ctypes.c_uint32()
+    kr = iokit.IOServiceOpen(
+        service, libc.mach_task_self(),
+        1,  # kIOHIDParamConnectType
+        ctypes.byref(connect))
+    iokit.IOObjectRelease(service)
+    if kr != 0:
+        raise RuntimeError(f"IOServiceOpen failed: {kr:#x}")
+
+    try:
+        event_data = NXEventData()
+        # NXEventData mouseMove: first 4 bytes = dx (int32), next 4 = dy (int32)
+        struct.pack_into("<ii", event_data.data, 0, dx, dy)
+        location = IOGPoint(x=0, y=0)
+
+        kr = iokit.IOHIDPostEvent(
+            connect.value, NX_MOUSEMOVED, location,
+            ctypes.byref(event_data),
+            2,  # kNXEventDataVersion
+            0,  # eventFlags
+            0)  # options
+        if kr != 0:
+            raise RuntimeError(f"IOHIDPostEvent failed: {kr:#x}")
+    finally:
+        iokit.IOServiceClose(connect)
+
+
 def _simulate_macos():
     # Generate random offsets for natural-looking movement
     dx = random.randint(5, 20)
     dy = random.randint(5, 20)
 
-    # METHOD 1: CGWarpMouseCursorPosition (resets HID idle timer — CGEventPost does NOT)
+    # METHOD 1: IOHIDPostEvent (kernel-level HID event — resets the real idle timer)
     try:
-        from Quartz import (
-            CGWarpMouseCursorPosition, CGAssociateMouseAndMouseCursorPosition,
-            CGEventCreate, CGEventGetLocation,
-        )
-        event = CGEventCreate(None)
-        pos = CGEventGetLocation(event)
-
-        # Move cursor away and back — warp resets the system idle timer
-        for warp_x, warp_y in [(pos.x + dx, pos.y + dy), (pos.x, pos.y)]:
-            CGWarpMouseCursorPosition((warp_x, warp_y))
-            time.sleep(0.03 + random.random() * 0.04)
-
-        # Re-associate mouse so physical movement works normally
-        CGAssociateMouseAndMouseCursorPosition(True)
-        _log.debug("CGWarp: moved +%d,+%d and back at (%.0f, %.0f)", dx, dy, pos.x, pos.y)
+        _post_hid_event(dx, dy)
+        time.sleep(0.05)
+        _post_hid_event(-dx, -dy)  # move back
+        _log.debug("IOHIDPost: moved +%d,+%d and back", dx, dy)
     except Exception as e:
-        _log.debug("CGWarp: FAILED - %s", e)
+        _log.warning("IOHIDPost: FAILED - %s", e)
 
-    # METHOD 2: cliclick (native C binary, sends key event)
+    # METHOD 2: cliclick (native C binary, sends key event as extra signal)
     if _cliclick:
         try:
-            # Note: cliclick kp: only supports named keys (f1-f16, space, etc.), not modifiers
             result = subprocess.run(
-                [_cliclick, f"m:+{dx},+0", f"m:+0,+{dy}", f"m:-{dx},-{dy}",
-                 "kp:f15", "kp:f15"],
+                [_cliclick, "kp:f15"],
                 capture_output=True, text=True, timeout=5,
             )
             if result.returncode == 0:
-                _log.debug("cliclick: moved +%d,+%d and f15", dx, dy)
+                _log.debug("cliclick: sent f15")
             else:
                 _log.warning("cliclick: exit code %d stderr: %s", result.returncode, result.stderr.strip())
         except Exception as e:
