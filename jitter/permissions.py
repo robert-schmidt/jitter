@@ -39,10 +39,12 @@ def check_all():
     try:
         subprocess.run(
             ["osascript", "-e",
-             'display dialog "Jitter needs these permissions in System Settings → Privacy & Security:\\n\\n'
-             '1. Accessibility — for simulating input\\n'
-             '2. Automation → System Events — for sending keystrokes\\n\\n'
-             'Grant both, then relaunch." '
+             'display dialog "Jitter works without permissions, but granting Accessibility '
+             'in System Settings → Privacy & Security enables additional idle reset methods '
+             '(IOHIDPostEvent and cliclick mouse simulation).\\n\\n'
+             'To grant: System Settings → Privacy & Security → Accessibility → add Jitter.app\\n\\n'
+             'Without Accessibility, Jitter still keeps Teams active using DeclareUserActivity '
+             'and Teams window activation." '
              'with title "Jitter" '
              'buttons {"OK"} default button "OK" with icon note'],
             capture_output=True, timeout=10,
