@@ -158,8 +158,7 @@ def _simulate_macos():
     except Exception as e:
         _log.warning("IOHIDPost: FAILED - %s", e)
 
-    # METHOD 2: cliclick with pauses (Teams monitors CGEvent mouse moves)
-    # w: = wait in ms between actions, larger moves, realistic timing
+    # METHOD 2: cliclick with pauses (mouse moves + keypress)
     if _cliclick:
         try:
             result = subprocess.run(
@@ -178,7 +177,40 @@ def _simulate_macos():
         except Exception as e:
             _log.debug("cliclick: FAILED - %s", e)
 
-    # pynput removed — crashes on macOS Tahoe (EXC_BREAKPOINT in backend)
+    # METHOD 3: CGEventPost — keyboard + mouse + scroll to both tap points
+    # Different code path than cliclick; may bypass enterprise event filtering
+    try:
+        from Quartz import (
+            CGEventCreateMouseEvent, CGEventCreateKeyboardEvent,
+            CGEventCreateScrollWheelEvent,
+            CGEventPost, CGEventCreate, CGEventGetLocation,
+            kCGEventMouseMoved, kCGHIDEventTap, kCGSessionEventTap,
+            kCGScrollEventUnitPixel,
+        )
+        event = CGEventCreate(None)
+        pos = CGEventGetLocation(event)
+
+        # Keyboard F15 to session tap
+        CGEventPost(kCGSessionEventTap, CGEventCreateKeyboardEvent(None, 113, True))
+        CGEventPost(kCGSessionEventTap, CGEventCreateKeyboardEvent(None, 113, False))
+
+        # Mouse move to HID tap
+        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
+            None, kCGEventMouseMoved, (pos.x + dx, pos.y + dy), 0))
+        time.sleep(0.05)
+        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
+            None, kCGEventMouseMoved, (pos.x, pos.y), 0))
+
+        # Tiny scroll (nearly invisible)
+        CGEventPost(kCGSessionEventTap,
+            CGEventCreateScrollWheelEvent(None, kCGScrollEventUnitPixel, 1, 1))
+        time.sleep(0.05)
+        CGEventPost(kCGSessionEventTap,
+            CGEventCreateScrollWheelEvent(None, kCGScrollEventUnitPixel, 1, -1))
+
+        _log.debug("CGEvent: F15 + mouse + scroll at (%.0f, %.0f)", pos.x, pos.y)
+    except Exception as e:
+        _log.debug("CGEvent: FAILED - %s", e)
 
 
 def _simulate_fallback():
