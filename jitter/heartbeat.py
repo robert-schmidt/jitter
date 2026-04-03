@@ -157,36 +157,21 @@ def _simulate_macos():
     except Exception as e:
         _log.warning("IOHIDPost: FAILED - %s", e)
 
-    # METHOD 2: cliclick (native C binary, sends key event as extra signal)
+    # METHOD 2: cliclick (mouse moves + keypress — Teams monitors CGEvent mouse moves directly)
     if _cliclick:
         try:
             result = subprocess.run(
-                [_cliclick, "kp:f15"],
+                [_cliclick,
+                 f"m:+{dx},+0", f"m:+0,+{dy}", f"m:-{dx},-{dy}",
+                 "kp:f15", "kp:f15"],
                 capture_output=True, text=True, timeout=5,
             )
             if result.returncode == 0:
-                _log.debug("cliclick: sent f15")
+                _log.debug("cliclick: moved +%d,+%d and f15", dx, dy)
             else:
                 _log.warning("cliclick: exit code %d stderr: %s", result.returncode, result.stderr.strip())
         except Exception as e:
             _log.debug("cliclick: FAILED - %s", e)
-
-    # METHOD 3: osascript + System Events (needs Automation permission)
-    try:
-        result = subprocess.run(
-            ["osascript", "-e",
-             'tell application "System Events"\n'
-             '  key code 56\n'
-             '  key code 60\n'
-             'end tell'],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode == 0:
-            _log.debug("osascript: sent shift+rshift via System Events")
-        else:
-            _log.debug("osascript: exit code %d stderr: %s", result.returncode, result.stderr.strip())
-    except Exception as e:
-        _log.debug("osascript: FAILED - %s", e)
 
     # pynput removed — crashes on macOS Tahoe (EXC_BREAKPOINT in backend)
 
