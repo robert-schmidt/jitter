@@ -24,12 +24,12 @@ Amphetamine is a great app, but it stopped working on my Mac one day and I have 
 ## How It Works
 
 - Every **2 minutes** (configurable), Jitter fires 4 redundant methods to reset all idle detectors:
-  1. **`cliclick`** (if installed) — native C binary, most reliable. Simulates mouse moves + shift key as a separate process. Install with `brew install cliclick`.
-  2. **`osascript` + System Events** — sends keystrokes via macOS System Events, which has its own Accessibility context. Works even if the app's own permissions are limited.
-  3. **Quartz `CGEvent`** — direct mouse movement (randomized 5-20px in multiple directions) + shift key at the HID event tap level. This is the API Teams checks via `CGEventSource`.
-  4. **`pynput` F15** — invisible keypress as a final fallback.
+  1. **`IOHIDPostEvent`** — posts a `NX_MOUSEMOVED` event directly to the IOKit HID kernel layer, resetting the real `HIDIdleTime` counter.
+  2. **`cliclick`** (if installed) — native C binary. Sends mouse moves (30-80px, square pattern with 300-700ms pauses between steps) + F15 keypress. Install with `brew install cliclick`.
+  3. **`IOPMAssertionDeclareUserActivity`** — Apple's power management API to declare the user active, equivalent to pressing a key.
+  4. **Teams window activation** — finds the running Teams process and briefly activates its window via `NSRunningApplication`, triggering an app activation event that Teams recognises as user presence.
   5. **`caffeinate -u`** — prevents system sleep for the pulse interval.
-- Mouse movements are **randomized** in direction and distance to look natural — Teams ignores tiny 1px nudges.
+- Mouse movements are **randomized** in direction and distance (30-80px per axis) to look natural.
 - After **60 minutes** of no real keyboard input (configurable), Jitter inserts a **10-minute skip** (configurable) before the next pulse to mimic natural human activity. After the skip, the idle counter resets and the cycle repeats.
 - **Schedule support** — set active hours and days so Jitter only runs during work time (disabled by default). Outside the schedule, it sleeps and the icon turns gray.
 - **Launch at login** — toggle from the tray menu (default: off).
@@ -88,20 +88,21 @@ git clone https://github.com/robert-schmidt/jitter.git /tmp/jitter && cd /tmp/ji
 
 ### macOS
 
-Jitter requires two system permissions to function. On every launch, the app checks whether it can simulate keypresses and listen for keyboard input. If either permission is missing, it tells you exactly which one(s) to grant and opens System Settings. If both are already granted, no dialog appears.
+Jitter requires **Accessibility** permission to simulate input. On launch, it checks if `cliclick` can send events — if it can, no dialog appears. If permissions are missing, a dialog tells you what to grant.
 
-You must grant **both** of the following in **System Settings → Privacy & Security**:
+Grant the following in **System Settings → Privacy & Security**:
 
-1. **Accessibility** — required for simulating the F15 keypress (`pynput` keyboard controller)
-2. **Input Monitoring** — required for detecting real keyboard activity to track idle time (`pynput` keyboard listener)
+1. **Accessibility** — required for simulating mouse movement and keypresses (via `cliclick` and `IOHIDPostEvent`)
 
-To grant permissions:
+To grant:
 1. Open **System Settings → Privacy & Security → Accessibility**
 2. Click the **+** button, navigate to `Jitter.app` (or your terminal app if running from source), and add it
-3. Repeat for **Privacy & Security → Input Monitoring**
-4. Relaunch Jitter
+3. Relaunch Jitter
 
-> **Note:** If running from source (not the `.app` bundle), you need to grant these permissions to your **terminal app** (Terminal, iTerm2, etc.) instead.
+**Optional** (improves reliability on some systems):
+- **Automation → System Events** — allows sending keystrokes via osascript. Not required on enterprise Macs where this is typically blocked by MDM.
+
+> **Note:** If running from source (not the `.app` bundle), grant permissions to your **terminal app** (Terminal, iTerm2, etc.) instead.
 
 > **Tested on:** macOS Tahoe 26.3.1 (a) (25D771280a)
 
@@ -140,7 +141,7 @@ jitter/
 ├── jitter/
 │   ├── main.py              — entry point, permission check
 │   ├── tray.py              — system tray setup and menu
-│   ├── heartbeat.py         — activity simulation (cliclick, osascript, CGEvent)
+│   ├── heartbeat.py         — activity simulation (IOHIDPost, cliclick, Teams activation)
 │   ├── idle.py              — idle detection via CGEventSource
 │   ├── icons.py             — generates tray icons (green/amber/gray circles)
 │   ├── dialogs.py           — About window and quit confirmation
