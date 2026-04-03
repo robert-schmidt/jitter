@@ -76,7 +76,7 @@ Settings are saved to `~/.jitter/config.json` and persist across restarts.
 
 ## Install & Run
 
-Requires Python 3.11+, Git, and `cliclick` (macOS).
+Requires Python 3.11+, Git, and [Homebrew](https://brew.sh) (macOS).
 
 ```bash
 brew install cliclick
