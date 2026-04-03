@@ -52,11 +52,28 @@ def check_all():
 
     if trusted:
         _log.info("Accessibility: granted")
+        # Clear the "dialog shown" flag so it shows again if permission is revoked
+        _dismissed_path = os.path.join(os.path.expanduser("~"), ".jitter", ".permissions_shown")
+        if os.path.exists(_dismissed_path):
+            os.remove(_dismissed_path)
         return
 
     _log.warning("Accessibility: NOT granted — IOHIDPostEvent and cliclick "
                  "may not work. Grant in System Settings → Privacy & Security "
                  "→ Accessibility → add Jitter.app")
+
+    # Only show the dialog once — don't nag on every launch
+    dismissed_path = os.path.join(os.path.expanduser("~"), ".jitter", ".permissions_shown")
+    if os.path.exists(dismissed_path):
+        _log.debug("Permission dialog already shown, skipping")
+        return
+
+    # Mark as shown before launching the dialog
+    try:
+        with open(dismissed_path, "w") as f:
+            f.write("1")
+    except OSError:
+        pass
 
     # Show dialog in a background thread so it never blocks tray icon loading
     t = threading.Thread(target=_show_dialog, daemon=True)
