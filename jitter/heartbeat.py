@@ -162,8 +162,8 @@ def _declare_user_activity():
         raise RuntimeError(f"IOPMAssertionDeclareUserActivity failed: {kr:#x}")
 
 
-def _activate_teams():
-    """Briefly activate Teams window so it receives a system activation event."""
+def _activate_teams_and_interact(cliclick_path, dx, dy, wait):
+    """Activate Teams, send mouse/key input while it's focused, then switch back."""
     from AppKit import NSWorkspace, NSApplicationActivateIgnoringOtherApps
     ws = NSWorkspace.sharedWorkspace()
     front = ws.frontmostApplication()
@@ -175,9 +175,25 @@ def _activate_teams():
             break
     if not teams:
         raise RuntimeError("Teams not running")
-    # Activate Teams, wait briefly, switch back
+
+    # Activate Teams
     teams.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
-    time.sleep(0.15)
+    time.sleep(0.3)
+
+    # Send input WHILE Teams is focused — Teams sees this as user activity
+    if cliclick_path:
+        subprocess.run(
+            [cliclick_path,
+             f"m:+{dx},+0", f"w:{wait}",
+             f"m:+0,+{dy}", f"w:{wait}",
+             f"m:-{dx},+0", f"w:{wait}",
+             f"m:+0,-{dy}",
+             "kp:f15"],
+            capture_output=True, timeout=15,
+        )
+
+    # Switch back to previous app
+    time.sleep(0.1)
     if front and front.bundleIdentifier() != teams.bundleIdentifier():
         front.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
 
@@ -196,36 +212,18 @@ def _simulate_macos():
     except Exception as e:
         _log.warning("IOHIDPost: FAILED - %s", e)
 
-    # METHOD 2: cliclick with pauses (mouse moves + keypress)
-    if _cliclick:
-        try:
-            result = subprocess.run(
-                [_cliclick,
-                 f"m:+{dx},+0",   f"w:{wait}",
-                 f"m:+0,+{dy}",   f"w:{wait}",
-                 f"m:-{dx},+0",   f"w:{wait}",
-                 f"m:+0,-{dy}",   f"w:{wait}",
-                 "kp:f15"],
-                capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode == 0:
-                _log.debug("cliclick: moved +%d,+%d (wait %dms) and f15", dx, dy, wait)
-            else:
-                _log.warning("cliclick: exit code %d stderr: %s", result.returncode, result.stderr.strip())
-        except Exception as e:
-            _log.debug("cliclick: FAILED - %s", e)
-
-    # METHOD 3: Declare user activity via power management API
+    # METHOD 2: Declare user activity via power management API
     try:
         _declare_user_activity()
         _log.debug("DeclareUserActivity: OK")
     except Exception as e:
         _log.debug("DeclareUserActivity: FAILED - %s", e)
 
-    # METHOD 4: Briefly activate Teams window (triggers app activation event)
+    # METHOD 3: Activate Teams, send mouse/key input WHILE Teams is focused, switch back
+    # Teams must be the frontmost app to register the input as user activity
     try:
-        _activate_teams()
-        _log.debug("ActivateTeams: OK")
+        _activate_teams_and_interact(_cliclick, dx, dy, wait)
+        _log.debug("ActivateTeams+input: OK (wait %dms)", wait)
     except Exception as e:
         _log.debug("ActivateTeams: %s", e)
 
