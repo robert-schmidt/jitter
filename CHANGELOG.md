@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.3.3 — 2026-04-03
+
+**Enterprise Mac compatibility — complete rewrite of activity simulation.**
+
+The previous methods (osascript, CGEvent, pynput) stopped working on enterprise/corporate Macs where security software blocks synthetic events from resetting the system idle timer. This release replaces all of them with methods that work regardless of enterprise security policies.
+
+### Fixed
+- **`cliclick kp:shift` was invalid** — cliclick doesn't support modifier keys with `kp:`, causing silent failure (exit code 1) every pulse. The entire cliclick command — including mouse moves — was aborting. Replaced with `kp:f15`.
+- **Events not resetting macOS idle timer** — `CGEventPost` and `CGWarpMouseCursorPosition` don't reset `HIDIdleTime` on newer macOS. Added `IOHIDPostEvent` which posts `NX_MOUSEMOVED` directly to the IOKit HID kernel layer.
+- **Enterprise security blocking CGEventSource reset** — on managed Macs, no synthetic event method resets `CGEventSourceSecondsSinceLastEventType` (which Teams reads). Added `IOPMAssertionDeclareUserActivity` and direct Teams window activation via `NSRunningApplication` to bypass the idle timer entirely.
+- **Permission dialog showing when already granted** — now tests if cliclick can actually send events before falling back to `AXIsProcessTrusted()`.
+
+### Changed
+- **4 new activity methods** replacing the old 3:
+  1. `IOHIDPostEvent` — kernel-level NX_MOUSEMOVED (resets HIDIdleTime)
+  2. `cliclick` — mouse moves in square pattern (30-80px, 300-700ms pauses) + F15 keypress
+  3. `IOPMAssertionDeclareUserActivity` — Apple's power management API to declare user active
+  4. Teams window activation — briefly activates Teams via NSRunningApplication
+- **Removed** osascript/System Events method (blocked by MDM on enterprise Macs)
+- **Removed** Quartz CGEvent method (doesn't reset idle on newer macOS)
+- **Removed** pynput (crashes on macOS Tahoe)
+- **Better diagnostics** — VERIFY now logs both `CGEventSource` and `HIDIdleTime` (kernel) counters
+- Mouse movements increased from 5-20px to 30-80px with realistic pauses between steps
+- Debug logging restored (was accidentally set to WARNING in v1.3.2)
+
 ## v1.3.0 — 2026-04-01
 
 - **Custom app icon** — green dot with pulse rings on dark background
