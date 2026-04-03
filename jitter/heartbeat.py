@@ -144,30 +144,35 @@ def _post_hid_event(dx: int, dy: int):
 
 
 def _simulate_macos():
-    # Generate random offsets for natural-looking movement
-    dx = random.randint(5, 20)
-    dy = random.randint(5, 20)
+    # Larger offsets + randomised pauses to look human
+    dx = random.randint(30, 80)
+    dy = random.randint(30, 80)
+    wait = random.randint(300, 700)   # ms between moves
 
-    # METHOD 1: IOHIDPostEvent (kernel-level HID event — resets the real idle timer)
+    # METHOD 1: IOHIDPostEvent (kernel-level — resets HIDIdleTime)
     try:
         _post_hid_event(dx, dy)
         time.sleep(0.05)
-        _post_hid_event(-dx, -dy)  # move back
+        _post_hid_event(-dx, -dy)
         _log.debug("IOHIDPost: moved +%d,+%d and back", dx, dy)
     except Exception as e:
         _log.warning("IOHIDPost: FAILED - %s", e)
 
-    # METHOD 2: cliclick (mouse moves + keypress — Teams monitors CGEvent mouse moves directly)
+    # METHOD 2: cliclick with pauses (Teams monitors CGEvent mouse moves)
+    # w: = wait in ms between actions, larger moves, realistic timing
     if _cliclick:
         try:
             result = subprocess.run(
                 [_cliclick,
-                 f"m:+{dx},+0", f"m:+0,+{dy}", f"m:-{dx},-{dy}",
-                 "kp:f15", "kp:f15"],
-                capture_output=True, text=True, timeout=5,
+                 f"m:+{dx},+0",   f"w:{wait}",
+                 f"m:+0,+{dy}",   f"w:{wait}",
+                 f"m:-{dx},+0",   f"w:{wait}",
+                 f"m:+0,-{dy}",   f"w:{wait}",
+                 "kp:f15"],
+                capture_output=True, text=True, timeout=15,
             )
             if result.returncode == 0:
-                _log.debug("cliclick: moved +%d,+%d and f15", dx, dy)
+                _log.debug("cliclick: moved +%d,+%d (wait %dms) and f15", dx, dy, wait)
             else:
                 _log.warning("cliclick: exit code %d stderr: %s", result.returncode, result.stderr.strip())
         except Exception as e:
