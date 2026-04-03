@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.4 — 2026-04-03
+
+### Fixed
+- **F15 "~" appearing in terminal** — cliclick's F15 keypress was landing in Terminal (which interprets it as escape sequence `\e[28~`). Now verifies Teams is actually the frontmost app before sending any input.
+- **Permission dialog never showing** — was checking if the `cliclick` binary had Accessibility (it has its own entry from Homebrew), not whether Jitter.app itself had it. Now checks `AXIsProcessTrusted()` for the running process.
+- **Dialog blocked on corporate Macs** — permission dialog used `osascript display dialog` which needs Automation permission (blocked by MDM). Now uses tkinter which needs no permissions.
+- **No permission errors in logs** — now logs a warning on launch when Accessibility is not granted, explaining which methods won't work.
+- **Screen stays on while pulsing** — `caffeinate -u -d -i` prevents display sleep and screensaver. Killed immediately when entering AFK skip or going outside schedule.
+- **VERIFY false alarm** — HIDIdle threshold raised from 2s to 5s to account for cliclick wait time.
+
+### Changed
+- **Mouse/key input sent while Teams is focused** — activates Teams first, sends cliclick moves + F15 while Teams is the active app, then switches back. Teams registers this as real user interaction in its window.
+
 ## v1.3.3 — 2026-04-03
 
 **Enterprise Mac compatibility — complete rewrite of activity simulation.**
