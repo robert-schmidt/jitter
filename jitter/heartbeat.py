@@ -212,21 +212,47 @@ def _simulate_fallback():
 def _verify_idle_reset():
     if platform.system() != "Darwin":
         return
+
+    # Check 1: CGEventSource (user-space idle counter)
+    cg_idle = None
     try:
         from Quartz import (
             CGEventSourceSecondsSinceLastEventType,
             kCGEventSourceStateCombinedSessionState,
             kCGAnyInputEventType,
         )
-        sys_idle = CGEventSourceSecondsSinceLastEventType(
+        cg_idle = CGEventSourceSecondsSinceLastEventType(
             kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType
         )
-        if sys_idle < 2.0:
-            _log.debug("VERIFY: system idle %.1fs — events ARE landing", sys_idle)
-        else:
-            _log.warning("VERIFY: system idle %.1fs — events NOT landing!", sys_idle)
-    except Exception as e:
-        _log.debug("VERIFY: could not check - %s", e)
+    except Exception:
+        pass
+
+    # Check 2: IOKit HIDIdleTime (kernel-level idle counter — what Teams reads)
+    hid_idle = None
+    try:
+        result = subprocess.run(
+            ["ioreg", "-c", "IOHIDSystem", "-d", "4"],
+            capture_output=True, text=True, timeout=3,
+        )
+        for line in result.stdout.split("\n"):
+            if "HIDIdleTime" in line and "=" in line:
+                ns = int(line.split("=")[-1].strip())
+                hid_idle = ns / 1_000_000_000
+                break
+    except Exception:
+        pass
+
+    parts = []
+    if cg_idle is not None:
+        parts.append(f"CGEvent={cg_idle:.1f}s")
+    if hid_idle is not None:
+        parts.append(f"HIDIdle={hid_idle:.1f}s")
+
+    landed = (hid_idle is not None and hid_idle < 2.0) or (cg_idle is not None and cg_idle < 2.0)
+    if landed:
+        _log.debug("VERIFY: %s — events ARE landing", " ".join(parts))
+    else:
+        _log.warning("VERIFY: %s — events NOT landing!", " ".join(parts))
 
 
 def _poke_caffeinate(duration: int):
