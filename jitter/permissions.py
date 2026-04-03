@@ -1,11 +1,18 @@
 """Check macOS permissions on launch. Non-blocking."""
 
 import logging
+import os
 import platform
 import subprocess
 import threading
 
 _log = logging.getLogger("jitter.permissions")
+_log.setLevel(logging.DEBUG)
+_log_path = os.path.join(os.path.expanduser("~"), ".jitter", "debug.log")
+os.makedirs(os.path.dirname(_log_path), exist_ok=True)
+_fh = logging.FileHandler(_log_path, mode="a")
+_fh.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
+_log.addHandler(_fh)
 
 _DIALOG_MSG = (
     "Jitter needs Accessibility permission to simulate mouse "
