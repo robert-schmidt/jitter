@@ -1,53 +1,62 @@
 """Check macOS permissions on launch. Non-blocking."""
 
+import logging
 import platform
-import shutil
 import subprocess
 
-
-def _cliclick_works() -> bool:
-    """Quick check: can cliclick send a no-op key event?"""
-    for path in [shutil.which("cliclick"),
-                 "/opt/homebrew/bin/cliclick",
-                 "/usr/local/bin/cliclick"]:
-        if path:
-            try:
-                r = subprocess.run([path, "kp:f15"], capture_output=True, timeout=3)
-                if r.returncode == 0:
-                    return True
-            except Exception:
-                pass
-    return False
+_log = logging.getLogger("jitter.permissions")
 
 
 def check_all():
-    """Show a hint if Accessibility is missing. Never blocks the app."""
+    """Check permissions and show a hint if Accessibility is missing."""
     if platform.system() != "Darwin":
         return
 
-    # If cliclick can send events, permissions are working
-    if _cliclick_works():
-        return
-
+    # Check if THIS process has Accessibility (not cliclick's own entry)
+    trusted = False
     try:
         from ApplicationServices import AXIsProcessTrusted
-        if AXIsProcessTrusted():
-            return
+        trusted = AXIsProcessTrusted()
     except ImportError:
         return
 
+    if trusted:
+        _log.info("Accessibility: granted")
+        return
+
+    _log.warning("Accessibility: NOT granted — IOHIDPostEvent and cliclick "
+                 "may not work. Grant in System Settings → Privacy & Security "
+                 "→ Accessibility → add Jitter.app")
+
+    # Show dialog via native Python/tkinter (doesn't need Automation permission)
     try:
-        subprocess.run(
-            ["osascript", "-e",
-             'display dialog "Jitter works without permissions, but granting Accessibility '
-             'in System Settings → Privacy & Security enables additional idle reset methods '
-             '(IOHIDPostEvent and cliclick mouse simulation).\\n\\n'
-             'To grant: System Settings → Privacy & Security → Accessibility → add Jitter.app\\n\\n'
-             'Without Accessibility, Jitter still keeps Teams active using DeclareUserActivity '
-             'and Teams window activation." '
-             'with title "Jitter" '
-             'buttons {"OK"} default button "OK" with icon note'],
-            capture_output=True, timeout=10,
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo(
+            "Jitter — Permissions",
+            "Jitter works without permissions, but granting Accessibility "
+            "enables additional idle reset methods (IOHIDPostEvent and "
+            "cliclick mouse simulation).\n\n"
+            "To grant: System Settings → Privacy & Security → Accessibility "
+            "→ add Jitter.app\n\n"
+            "Without Accessibility, Jitter still keeps Teams active using "
+            "DeclareUserActivity and Teams window activation."
         )
+        root.destroy()
     except Exception:
-        pass
+        # Fallback to osascript if tkinter unavailable
+        try:
+            subprocess.run(
+                ["osascript", "-e",
+                 'display dialog "Jitter works without permissions, but granting '
+                 'Accessibility enables additional idle reset methods.\\n\\n'
+                 'To grant: System Settings → Privacy & Security → Accessibility '
+                 '→ add Jitter.app" '
+                 'with title "Jitter" buttons {"OK"} default button "OK" '
+                 'with icon note'],
+                capture_output=True, timeout=10,
+            )
+        except Exception:
+            pass

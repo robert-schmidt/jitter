@@ -176,26 +176,30 @@ def _activate_teams_and_interact(cliclick_path, dx, dy, wait):
     if not teams:
         raise RuntimeError("Teams not running")
 
-    # Activate Teams
+    # Activate Teams and wait for it to become frontmost
     teams.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
     time.sleep(0.3)
 
-    # Send input WHILE Teams is focused — Teams sees this as user activity
-    if cliclick_path:
-        subprocess.run(
-            [cliclick_path,
-             f"m:+{dx},+0", f"w:{wait}",
-             f"m:+0,+{dy}", f"w:{wait}",
-             f"m:-{dx},+0", f"w:{wait}",
-             f"m:+0,-{dy}",
-             "kp:f15"],
-            capture_output=True, timeout=15,
-        )
-
-    # Switch back to previous app
-    time.sleep(0.1)
-    if front and front.bundleIdentifier() != teams.bundleIdentifier():
-        front.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+    # Only send input if Teams is actually the frontmost app now
+    # This prevents F15 from landing in Terminal/other apps (which prints "~")
+    current_front = ws.frontmostApplication()
+    if current_front and current_front.processIdentifier() == teams.processIdentifier():
+        if cliclick_path:
+            subprocess.run(
+                [cliclick_path,
+                 f"m:+{dx},+0", f"w:{wait}",
+                 f"m:+0,+{dy}", f"w:{wait}",
+                 f"m:-{dx},+0", f"w:{wait}",
+                 f"m:+0,-{dy}",
+                 "kp:f15"],
+                capture_output=True, timeout=15,
+            )
+        # Switch back to previous app
+        time.sleep(0.1)
+        if front and front.bundleIdentifier() != teams.bundleIdentifier():
+            front.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+    else:
+        _log.debug("ActivateTeams: Teams did not become frontmost, skipping input")
 
 
 def _simulate_macos():
