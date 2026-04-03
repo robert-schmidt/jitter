@@ -34,15 +34,13 @@ def check_all():
         from tkinter import messagebox
         root = tk.Tk()
         root.withdraw()
-        messagebox.showinfo(
-            "Jitter — Permissions",
-            "Jitter works without permissions, but granting Accessibility "
-            "enables additional idle reset methods (IOHIDPostEvent and "
-            "cliclick mouse simulation).\n\n"
-            "To grant: System Settings → Privacy & Security → Accessibility "
-            "→ add Jitter.app\n\n"
-            "Without Accessibility, Jitter still keeps Teams active using "
-            "DeclareUserActivity and Teams window activation."
+        messagebox.showwarning(
+            "Jitter — Accessibility Required",
+            "Jitter needs Accessibility permission to simulate mouse "
+            "movement and keep Teams active.\n\n"
+            "To grant:\n"
+            "System Settings → Privacy & Security → Accessibility → add Jitter.app\n\n"
+            "Then relaunch Jitter."
         )
         root.destroy()
     except Exception:
@@ -50,12 +48,12 @@ def check_all():
         try:
             subprocess.run(
                 ["osascript", "-e",
-                 'display dialog "Jitter works without permissions, but granting '
-                 'Accessibility enables additional idle reset methods.\\n\\n'
+                 'display dialog "Jitter needs Accessibility permission to '
+                 'simulate mouse movement and keep Teams active.\\n\\n'
                  'To grant: System Settings → Privacy & Security → Accessibility '
-                 '→ add Jitter.app" '
+                 '→ add Jitter.app\\n\\nThen relaunch Jitter." '
                  'with title "Jitter" buttons {"OK"} default button "OK" '
-                 'with icon note'],
+                 'with icon caution'],
                 capture_output=True, timeout=10,
             )
         except Exception:
