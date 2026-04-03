@@ -28,33 +28,42 @@ def check_all():
                  "may not work. Grant in System Settings → Privacy & Security "
                  "→ Accessibility → add Jitter.app")
 
-    # Show dialog via native Python/tkinter (doesn't need Automation permission)
+    # Show dialog — try osascript first (looks native), fall back to tkinter
+    shown = False
     try:
-        import tkinter as tk
-        from tkinter import messagebox
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showwarning(
-            "Jitter — Accessibility Required",
-            "Jitter needs Accessibility permission to simulate mouse "
-            "movement and keep Teams active.\n\n"
-            "To grant:\n"
-            "System Settings → Privacy & Security → Accessibility → add Jitter.app\n\n"
-            "Then relaunch Jitter."
+        r = subprocess.run(
+            ["osascript", "-e",
+             'display dialog "Jitter needs Accessibility permission to '
+             'simulate mouse movement and keep Teams active.\\n\\n'
+             'To grant: System Settings → Privacy & Security → Accessibility '
+             '→ add Jitter.app\\n\\nThen relaunch Jitter." '
+             'with title "Jitter" buttons {"OK"} default button "OK" '
+             'with icon caution'],
+            capture_output=True, timeout=15,
         )
-        root.destroy()
+        shown = r.returncode == 0
     except Exception:
-        # Fallback to osascript if tkinter unavailable
+        pass
+
+    if not shown:
         try:
-            subprocess.run(
-                ["osascript", "-e",
-                 'display dialog "Jitter needs Accessibility permission to '
-                 'simulate mouse movement and keep Teams active.\\n\\n'
-                 'To grant: System Settings → Privacy & Security → Accessibility '
-                 '→ add Jitter.app\\n\\nThen relaunch Jitter." '
-                 'with title "Jitter" buttons {"OK"} default button "OK" '
-                 'with icon caution'],
-                capture_output=True, timeout=10,
+            import tkinter as tk
+            from tkinter import messagebox
+            root = tk.Tk()
+            root.withdraw()
+            # Force to front — LSUIElement apps have no dock presence
+            root.attributes("-topmost", True)
+            root.lift()
+            root.focus_force()
+            messagebox.showwarning(
+                "Jitter — Accessibility Required",
+                "Jitter needs Accessibility permission to simulate mouse "
+                "movement and keep Teams active.\n\n"
+                "To grant:\n"
+                "System Settings → Privacy & Security → Accessibility "
+                "→ add Jitter.app\n\n"
+                "Then relaunch Jitter."
             )
+            root.destroy()
         except Exception:
             pass
