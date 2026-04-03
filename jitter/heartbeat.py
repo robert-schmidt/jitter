@@ -143,8 +143,46 @@ def _post_hid_event(dx: int, dy: int):
         iokit.IOServiceClose(connect)
 
 
+def _declare_user_activity():
+    """Call IOPMAssertionDeclareUserActivity — Apple's API to declare the user active."""
+    import ctypes
+    cf = ctypes.cdll.LoadLibrary(
+        "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+    iokit = ctypes.cdll.LoadLibrary(
+        "/System/Library/Frameworks/IOKit.framework/IOKit")
+    cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+    cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+    iokit.IOPMAssertionDeclareUserActivity.restype = ctypes.c_int
+    iokit.IOPMAssertionDeclareUserActivity.argtypes = [
+        ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_uint32)]
+    name = cf.CFStringCreateWithCString(None, b"Jitter User Activity", 0x08000100)
+    aid = ctypes.c_uint32()
+    kr = iokit.IOPMAssertionDeclareUserActivity(name, 0, ctypes.byref(aid))
+    if kr != 0:
+        raise RuntimeError(f"IOPMAssertionDeclareUserActivity failed: {kr:#x}")
+
+
+def _activate_teams():
+    """Briefly activate Teams window so it receives a system activation event."""
+    from AppKit import NSWorkspace, NSApplicationActivateIgnoringOtherApps
+    ws = NSWorkspace.sharedWorkspace()
+    front = ws.frontmostApplication()
+    teams = None
+    for app in ws.runningApplications():
+        bid = app.bundleIdentifier() or ""
+        if "teams" in str(bid).lower() and "com.microsoft" in str(bid).lower():
+            teams = app
+            break
+    if not teams:
+        raise RuntimeError("Teams not running")
+    # Activate Teams, wait briefly, switch back
+    teams.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+    time.sleep(0.15)
+    if front and front.bundleIdentifier() != teams.bundleIdentifier():
+        front.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+
+
 def _simulate_macos():
-    # Larger offsets + randomised pauses to look human
     dx = random.randint(30, 80)
     dy = random.randint(30, 80)
     wait = random.randint(300, 700)   # ms between moves
@@ -177,40 +215,19 @@ def _simulate_macos():
         except Exception as e:
             _log.debug("cliclick: FAILED - %s", e)
 
-    # METHOD 3: CGEventPost — keyboard + mouse + scroll to both tap points
-    # Different code path than cliclick; may bypass enterprise event filtering
+    # METHOD 3: Declare user activity via power management API
     try:
-        from Quartz import (
-            CGEventCreateMouseEvent, CGEventCreateKeyboardEvent,
-            CGEventCreateScrollWheelEvent,
-            CGEventPost, CGEventCreate, CGEventGetLocation,
-            kCGEventMouseMoved, kCGHIDEventTap, kCGSessionEventTap,
-            kCGScrollEventUnitPixel,
-        )
-        event = CGEventCreate(None)
-        pos = CGEventGetLocation(event)
-
-        # Keyboard F15 to session tap
-        CGEventPost(kCGSessionEventTap, CGEventCreateKeyboardEvent(None, 113, True))
-        CGEventPost(kCGSessionEventTap, CGEventCreateKeyboardEvent(None, 113, False))
-
-        # Mouse move to HID tap
-        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-            None, kCGEventMouseMoved, (pos.x + dx, pos.y + dy), 0))
-        time.sleep(0.05)
-        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-            None, kCGEventMouseMoved, (pos.x, pos.y), 0))
-
-        # Tiny scroll (nearly invisible)
-        CGEventPost(kCGSessionEventTap,
-            CGEventCreateScrollWheelEvent(None, kCGScrollEventUnitPixel, 1, 1))
-        time.sleep(0.05)
-        CGEventPost(kCGSessionEventTap,
-            CGEventCreateScrollWheelEvent(None, kCGScrollEventUnitPixel, 1, -1))
-
-        _log.debug("CGEvent: F15 + mouse + scroll at (%.0f, %.0f)", pos.x, pos.y)
+        _declare_user_activity()
+        _log.debug("DeclareUserActivity: OK")
     except Exception as e:
-        _log.debug("CGEvent: FAILED - %s", e)
+        _log.debug("DeclareUserActivity: FAILED - %s", e)
+
+    # METHOD 4: Briefly activate Teams window (triggers app activation event)
+    try:
+        _activate_teams()
+        _log.debug("ActivateTeams: OK")
+    except Exception as e:
+        _log.debug("ActivateTeams: %s", e)
 
 
 def _simulate_fallback():
