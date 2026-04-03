@@ -3,8 +3,31 @@
 import logging
 import platform
 import subprocess
+import threading
 
 _log = logging.getLogger("jitter.permissions")
+
+_DIALOG_MSG = (
+    "Jitter needs Accessibility permission to simulate mouse "
+    "movement and keep Teams active.\\n\\n"
+    "To grant: System Settings → Privacy & Security → Accessibility "
+    "→ add Jitter.app\\n\\nThen relaunch Jitter."
+)
+
+
+def _show_dialog():
+    """Show permission dialog in background thread — never blocks the app."""
+    # osascript looks native and always appears on top
+    try:
+        subprocess.run(
+            ["osascript", "-e",
+             f'display dialog "{_DIALOG_MSG}" '
+             'with title "Jitter" buttons {"OK"} default button "OK" '
+             'with icon caution'],
+            capture_output=True, timeout=15,
+        )
+    except Exception:
+        pass
 
 
 def check_all():
@@ -28,42 +51,6 @@ def check_all():
                  "may not work. Grant in System Settings → Privacy & Security "
                  "→ Accessibility → add Jitter.app")
 
-    # Show dialog — try osascript first (looks native), fall back to tkinter
-    shown = False
-    try:
-        r = subprocess.run(
-            ["osascript", "-e",
-             'display dialog "Jitter needs Accessibility permission to '
-             'simulate mouse movement and keep Teams active.\\n\\n'
-             'To grant: System Settings → Privacy & Security → Accessibility '
-             '→ add Jitter.app\\n\\nThen relaunch Jitter." '
-             'with title "Jitter" buttons {"OK"} default button "OK" '
-             'with icon caution'],
-            capture_output=True, timeout=15,
-        )
-        shown = r.returncode == 0
-    except Exception:
-        pass
-
-    if not shown:
-        try:
-            import tkinter as tk
-            from tkinter import messagebox
-            root = tk.Tk()
-            root.withdraw()
-            # Force to front — LSUIElement apps have no dock presence
-            root.attributes("-topmost", True)
-            root.lift()
-            root.focus_force()
-            messagebox.showwarning(
-                "Jitter — Accessibility Required",
-                "Jitter needs Accessibility permission to simulate mouse "
-                "movement and keep Teams active.\n\n"
-                "To grant:\n"
-                "System Settings → Privacy & Security → Accessibility "
-                "→ add Jitter.app\n\n"
-                "Then relaunch Jitter."
-            )
-            root.destroy()
-        except Exception:
-            pass
+    # Show dialog in a background thread so it never blocks tray icon loading
+    t = threading.Thread(target=_show_dialog, daemon=True)
+    t.start()
