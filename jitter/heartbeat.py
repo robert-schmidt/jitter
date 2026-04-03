@@ -74,10 +74,29 @@ def _simulate_macos():
     dx = random.randint(5, 20)
     dy = random.randint(5, 20)
 
-    # METHOD 1: cliclick (native C binary — most reliable, separate process)
+    # METHOD 1: CGWarpMouseCursorPosition (resets HID idle timer — CGEventPost does NOT)
+    try:
+        from Quartz import (
+            CGWarpMouseCursorPosition, CGAssociateMouseAndMouseCursorPosition,
+            CGEventCreate, CGEventGetLocation,
+        )
+        event = CGEventCreate(None)
+        pos = CGEventGetLocation(event)
+
+        # Move cursor away and back — warp resets the system idle timer
+        for warp_x, warp_y in [(pos.x + dx, pos.y + dy), (pos.x, pos.y)]:
+            CGWarpMouseCursorPosition((warp_x, warp_y))
+            time.sleep(0.03 + random.random() * 0.04)
+
+        # Re-associate mouse so physical movement works normally
+        CGAssociateMouseAndMouseCursorPosition(True)
+        _log.debug("CGWarp: moved +%d,+%d and back at (%.0f, %.0f)", dx, dy, pos.x, pos.y)
+    except Exception as e:
+        _log.debug("CGWarp: FAILED - %s", e)
+
+    # METHOD 2: cliclick (native C binary, sends key event)
     if _cliclick:
         try:
-            # Move mouse in a natural pattern using relative movements
             # Note: cliclick kp: only supports named keys (f1-f16, space, etc.), not modifiers
             result = subprocess.run(
                 [_cliclick, f"m:+{dx},+0", f"m:+0,+{dy}", f"m:-{dx},-{dy}",
@@ -91,7 +110,7 @@ def _simulate_macos():
         except Exception as e:
             _log.debug("cliclick: FAILED - %s", e)
 
-    # METHOD 2: osascript + System Events (separate process, own Accessibility)
+    # METHOD 3: osascript + System Events (needs Automation permission)
     try:
         result = subprocess.run(
             ["osascript", "-e",
@@ -107,36 +126,6 @@ def _simulate_macos():
             _log.debug("osascript: exit code %d stderr: %s", result.returncode, result.stderr.strip())
     except Exception as e:
         _log.debug("osascript: FAILED - %s", e)
-
-    # METHOD 3: Quartz CGEvent (direct, if Accessibility is granted to this process)
-    try:
-        from Quartz import (
-            CGEventCreateMouseEvent, CGEventCreateKeyboardEvent,
-            CGEventPost, CGEventCreate, CGEventGetLocation,
-            kCGEventMouseMoved, kCGHIDEventTap,
-        )
-        event = CGEventCreate(None)
-        pos = CGEventGetLocation(event)
-        x, y = pos.x, pos.y
-
-        # Natural multi-direction mouse movement
-        for step_x, step_y in [(dx, 0), (0, dy), (-dx, -dy)]:
-            CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-                None, kCGEventMouseMoved, (x + step_x, y + step_y), 0))
-            time.sleep(0.03 + random.random() * 0.04)  # 30-70ms between moves
-            x, y = x + step_x, y + step_y
-
-        # Return to original position
-        orig = CGEventGetLocation(CGEventCreate(None))
-        CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(
-            None, kCGEventMouseMoved, (pos.x, pos.y), 0))
-
-        # Shift key
-        CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, True))
-        CGEventPost(kCGHIDEventTap, CGEventCreateKeyboardEvent(None, 56, False))
-        _log.debug("CGEvent: multi-move (%+d,%+d) + shift at (%.0f, %.0f)", dx, dy, pos.x, pos.y)
-    except Exception as e:
-        _log.debug("CGEvent: FAILED - %s", e)
 
     # pynput removed — crashes on macOS Tahoe (EXC_BREAKPOINT in backend)
 
