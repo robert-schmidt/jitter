@@ -294,18 +294,24 @@ def _verify_idle_reset():
         _log.warning("VERIFY: %s — events NOT landing!", " ".join(parts))
 
 
-def _poke_caffeinate(duration: int):
+def _kill_caffeinate():
     global _caffeinate_proc
-    if platform.system() != "Darwin":
-        return
     if _caffeinate_proc is not None:
         try:
             _caffeinate_proc.kill()
         except OSError:
             pass
+        _caffeinate_proc = None
+
+
+def _poke_caffeinate(duration: int):
+    global _caffeinate_proc
+    if platform.system() != "Darwin":
+        return
+    _kill_caffeinate()
     try:
         _caffeinate_proc = subprocess.Popen(
-            ["caffeinate", "-u", "-t", str(duration + 30)],
+            ["caffeinate", "-u", "-d", "-i", "-t", str(duration + 30)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     except OSError:
@@ -345,12 +351,14 @@ def _tick():
         if not _is_within_schedule():
             _outside_schedule = True
             _skipping = False
+            _kill_caffeinate()
             _log.debug("TICK: outside schedule, sleeping %ds", SCHEDULE_CHECK)
             _next_pulse = time.time() + SCHEDULE_CHECK
             _timer = threading.Timer(SCHEDULE_CHECK, _tick)
         elif idle.idle_seconds() >= afk_threshold and not _skipping:
             _outside_schedule = False
             _skipping = True
+            _kill_caffeinate()
             _log.debug("TICK: AFK skip (idle %.0fs >= %ds)", idle.idle_seconds(), afk_threshold)
             _next_pulse = time.time() + skip_interval
             _timer = threading.Timer(skip_interval, _tick)
