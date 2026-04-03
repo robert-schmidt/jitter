@@ -23,22 +23,35 @@ Amphetamine is a great app, but it stopped working on my Mac one day and I have 
 
 ## How It Works
 
-- Every **2 minutes** (configurable), Jitter fires 4 redundant methods to reset all idle detectors:
-  1. **`IOHIDPostEvent`** — posts a `NX_MOUSEMOVED` event directly to the IOKit HID kernel layer, resetting the real `HIDIdleTime` counter.
-  2. **`cliclick`** (if installed) — native C binary. Sends mouse moves (30-80px, square pattern with 300-700ms pauses between steps) + F15 keypress. Install with `brew install cliclick`.
-  3. **`IOPMAssertionDeclareUserActivity`** — Apple's power management API to declare the user active, equivalent to pressing a key.
-  4. **Teams window activation** — finds the running Teams process and briefly activates its window via `NSRunningApplication`, triggering an app activation event that Teams recognises as user presence.
-  5. **`caffeinate -u`** — prevents system sleep for the pulse interval.
-- Mouse movements are **randomized** in direction and distance (30-80px per axis) to look natural.
-- After **60 minutes** of no real keyboard input (configurable), Jitter inserts a **10-minute skip** (configurable) before the next pulse to mimic natural human activity. After the skip, the idle counter resets and the cycle repeats.
+Every **2 minutes** (configurable), Jitter fires multiple redundant methods to keep you "Available." Each method targets a different layer of macOS idle detection, so at least one will work regardless of your system's security configuration.
+
+### Activity methods
+
+| # | Method | What it does | Permission |
+|---|--------|-------------|------------|
+| 1 | **`IOHIDPostEvent`** | Posts a `NX_MOUSEMOVED` event directly to the IOKit HID kernel layer, resetting the real `HIDIdleTime` counter that many apps check. | Accessibility |
+| 2 | **`cliclick`** | Native C binary. Moves the mouse in a square pattern (30–80 px per axis, 300–700 ms random pauses between steps) then presses the invisible F15 key. Generates realistic CGEvent mouse-move events. Installed via `brew install cliclick`. | Accessibility |
+| 3 | **`IOPMAssertionDeclareUserActivity`** | Apple's power management API — tells macOS the user is active, equivalent to pressing a key. Resets the system idle timer and prevents display sleep. | **None** |
+| 4 | **Teams window activation** | Finds the running Microsoft Teams process and briefly activates its window via `NSRunningApplication`, then immediately switches back to your previous app (~150 ms). Teams receives a system activation event and resets its internal idle state. Only runs if Teams is open. | **None** |
+| 5 | **`caffeinate -u`** | Prevents system sleep for the duration of the pulse interval. | **None** |
+
+Methods 3–5 require **no permissions at all** and work on any Mac, including enterprise/corporate machines with strict security policies. Methods 1–2 provide deeper idle timer resets when Accessibility permission is available.
+
+### AFK behaviour
+
+- After **60 minutes** of no real keyboard/mouse input (configurable), Jitter inserts a **10-minute skip** before the next pulse to mimic natural human activity — nobody is active for 8 hours straight without a break. After the skip, pulsing resumes normally.
+- On enterprise Macs where synthetic events don't reset the system idle counter, Jitter uses an internal timer to track the skip so it doesn't get stuck in a skip loop.
+
+### Other features
+
 - **Schedule support** — set active hours and days so Jitter only runs during work time (disabled by default). Outside the schedule, it sleeps and the icon turns gray.
 - **Launch at login** — toggle from the tray menu (default: off).
 - Everything runs in the **system tray** — no windows, no dock icon, no distractions.
-- **Debug log** at `~/.jitter/debug.log` — every pulse is logged with verification of whether events actually reset the system idle timer.
+- **Debug log** at `~/.jitter/debug.log` — every pulse logs which methods succeeded, plus verification of both `CGEventSource` (user-space) and `HIDIdleTime` (kernel) idle counters.
 
 > **Tip:** Pause Jitter while you're actively working — the mouse movement can interfere with precise cursor work (design tools, spreadsheets, etc.). Use the tray menu to quickly pause and resume.
 
-- **Note on screensavers:** While actively pulsing, Jitter will prevent display sleep and screensaver activation. Outside the schedule or when paused, the system behaves normally.
+> **Note on screensavers:** While actively pulsing, Jitter will prevent display sleep and screensaver activation. Outside the schedule or when paused, the system behaves normally.
 
 ### Tray Menu
 
@@ -64,17 +77,21 @@ Settings are saved to `~/.jitter/config.json` and persist across restarts.
 
 ## Install & Run
 
-Requires Python 3.11+, Git, and `cliclick` (macOS).
+Requires Python 3.11+ and Git.
 
 ```bash
-brew install cliclick
 git clone https://github.com/robert-schmidt/jitter.git
 cd jitter
 pip install -r requirements.txt
 python -m jitter.main
 ```
 
-> **Note:** `cliclick` is a native macOS tool for simulating mouse/keyboard events. It's the most reliable method for resetting the system idle timer. The pre-built `.app` bundle includes it automatically.
+**Optional:** install `cliclick` for mouse movement simulation (method 2):
+```bash
+brew install cliclick
+```
+
+> **Note:** `cliclick` is a native macOS tool for simulating mouse/keyboard events. It enables method 2 (mouse moves + F15 keypress) but is not required — Jitter works without it using methods 3–5.
 
 ### One-liner (macOS)
 
@@ -88,19 +105,20 @@ git clone https://github.com/robert-schmidt/jitter.git /tmp/jitter && cd /tmp/ji
 
 ### macOS
 
-Jitter requires **Accessibility** permission to simulate input. On launch, it checks if `cliclick` can send events — if it can, no dialog appears. If permissions are missing, a dialog tells you what to grant.
+**Jitter works without any permissions** — methods 3–5 (DeclareUserActivity, Teams activation, caffeinate) need no grants at all and are enough to keep Teams active on most systems, including enterprise Macs.
 
-Grant the following in **System Settings → Privacy & Security**:
+For the full set of methods, grant the following in **System Settings → Privacy & Security**:
 
-1. **Accessibility** — required for simulating mouse movement and keypresses (via `cliclick` and `IOHIDPostEvent`)
+| Permission | Required? | What it enables |
+|-----------|-----------|----------------|
+| **Accessibility** | Recommended | Enables `IOHIDPostEvent` (kernel idle reset) and `cliclick` (mouse movement simulation). Without this, methods 1–2 will log "FAILED" and only methods 3–5 will run. |
+| **Automation → System Events** | Not needed | Previously used for osascript keystroke sending. Removed in v1.3.3 — typically blocked by MDM on enterprise Macs anyway. |
 
-To grant:
+To grant Accessibility:
 1. Open **System Settings → Privacy & Security → Accessibility**
-2. Click the **+** button, navigate to `Jitter.app` (or your terminal app if running from source), and add it
-3. Relaunch Jitter
-
-**Optional** (improves reliability on some systems):
-- **Automation → System Events** — allows sending keystrokes via osascript. Not required on enterprise Macs where this is typically blocked by MDM.
+2. Click **+**, navigate to `Jitter.app`, and add it
+3. If `cliclick` is installed via Homebrew, also add `/opt/homebrew/bin/cliclick`
+4. Relaunch Jitter
 
 > **Note:** If running from source (not the `.app` bundle), grant permissions to your **terminal app** (Terminal, iTerm2, etc.) instead.
 
