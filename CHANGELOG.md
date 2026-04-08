@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.4.0 — 2026-04-08
+
+**Aggressive mouse movement overhaul — much harder for idle detection to ignore.**
+
+### Added
+- **Micro-jitter** — small random IOHIDPostEvent moves every ~30 seconds between main pulses, keeping idle timers continuously fresh
+- **Random multi-directional movement** — main pulse now sends 4-8 random cliclick moves in unpredictable directions (up to ±150px) instead of a predictable square pattern
+- **Multiple IOHIDPostEvent moves** — kernel-level pulse now sends 3-6 random moves per tick instead of a single back-and-forth
+- **Random scrolling** — occasional scroll events during Teams interaction to mimic human browsing
+
+### Changed
+- Mouse movements increased from 30-80px square pattern to ±150px random directions
+- cliclick timeout raised to 30s (more moves per pulse)
+- Version bumped to 1.4.0
+
 ## v1.3.4 — 2026-04-03
 
 ### Fixed
