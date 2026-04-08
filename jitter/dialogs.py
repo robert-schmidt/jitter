@@ -3,7 +3,7 @@
 import platform
 import subprocess
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 REPO = "https://github.com/robert-schmidt/jitter"
 
 ABOUT_LINES = [

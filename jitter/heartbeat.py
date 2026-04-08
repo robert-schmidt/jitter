@@ -15,12 +15,14 @@ from jitter import idle, config
 _caffeinate_proc: subprocess.Popen | None = None
 _lock = threading.Lock()
 _timer: threading.Timer | None = None
+_micro_timer: threading.Timer | None = None
 _running = False
 _skipping = False
 _outside_schedule = False
 _next_pulse: float = 0
 
 SCHEDULE_CHECK = 30
+MICRO_JITTER_INTERVAL = 30  # seconds between micro-jitters
 
 _log_path = os.path.join(os.path.expanduser("~"), ".jitter", "debug.log")
 os.makedirs(os.path.dirname(_log_path), exist_ok=True)
@@ -162,6 +164,27 @@ def _declare_user_activity():
         raise RuntimeError(f"IOPMAssertionDeclareUserActivity failed: {kr:#x}")
 
 
+def _random_cliclick_moves(cliclick_path, num_moves=None):
+    """Generate a sequence of random cliclick commands — big, erratic movements."""
+    if not cliclick_path:
+        return []
+    if num_moves is None:
+        num_moves = random.randint(4, 8)
+    cmds = [cliclick_path]
+    for _ in range(num_moves):
+        dx = random.randint(-150, 150)
+        dy = random.randint(-150, 150)
+        # Ensure minimum movement magnitude
+        if abs(dx) < 30:
+            dx = 30 * (1 if dx >= 0 else -1)
+        if abs(dy) < 30:
+            dy = 30 * (1 if dy >= 0 else -1)
+        cmds.append(f"m:+{dx},+{dy}")
+        cmds.append(f"w:{random.randint(200, 600)}")
+    cmds.append("kp:f15")
+    return cmds
+
+
 def _activate_teams_and_interact(cliclick_path, dx, dy, wait):
     """Activate Teams, send mouse/key input while it's focused, then switch back."""
     from AppKit import NSWorkspace, NSApplicationActivateIgnoringOtherApps
@@ -184,16 +207,25 @@ def _activate_teams_and_interact(cliclick_path, dx, dy, wait):
     # This prevents F15 from landing in Terminal/other apps (which prints "~")
     current_front = ws.frontmostApplication()
     if current_front and current_front.processIdentifier() == teams.processIdentifier():
-        if cliclick_path:
-            subprocess.run(
-                [cliclick_path,
-                 f"m:+{dx},+0", f"w:{wait}",
-                 f"m:+0,+{dy}", f"w:{wait}",
-                 f"m:-{dx},+0", f"w:{wait}",
-                 f"m:+0,-{dy}",
-                 "kp:f15"],
-                capture_output=True, timeout=15,
-            )
+        # Big random movements in many directions + scroll
+        cmds = _random_cliclick_moves(cliclick_path)
+        if cmds:
+            subprocess.run(cmds, capture_output=True, timeout=30)
+
+        # Random scroll to look human
+        scroll_amount = random.randint(-3, 3)
+        if scroll_amount != 0 and cliclick_path:
+            # cliclick doesn't support scroll, use AppleScript
+            try:
+                subprocess.run(
+                    ["osascript", "-e",
+                     f'tell application "System Events" to scroll area 1 of '
+                     f'(first process whose name is "Microsoft Teams") by {scroll_amount}'],
+                    capture_output=True, timeout=5,
+                )
+            except Exception:
+                pass
+
         # Switch back to previous app
         time.sleep(0.1)
         if front and front.bundleIdentifier() != teams.bundleIdentifier():
@@ -208,11 +240,19 @@ def _simulate_macos():
     wait = random.randint(300, 700)   # ms between moves
 
     # METHOD 1: IOHIDPostEvent (kernel-level — resets HIDIdleTime)
+    # Multiple random moves in different directions
     try:
-        _post_hid_event(dx, dy)
-        time.sleep(0.05)
-        _post_hid_event(-dx, -dy)
-        _log.debug("IOHIDPost: moved +%d,+%d and back", dx, dy)
+        num_hid_moves = random.randint(3, 6)
+        for i in range(num_hid_moves):
+            mdx = random.randint(-120, 120)
+            mdy = random.randint(-120, 120)
+            if abs(mdx) < 20:
+                mdx = 20 * (1 if mdx >= 0 else -1)
+            if abs(mdy) < 20:
+                mdy = 20 * (1 if mdy >= 0 else -1)
+            _post_hid_event(mdx, mdy)
+            time.sleep(random.uniform(0.05, 0.15))
+        _log.debug("IOHIDPost: %d random moves", num_hid_moves)
     except Exception as e:
         _log.warning("IOHIDPost: FAILED - %s", e)
 
@@ -227,7 +267,7 @@ def _simulate_macos():
     # Teams must be the frontmost app to register the input as user activity
     try:
         _activate_teams_and_interact(_cliclick, dx, dy, wait)
-        _log.debug("ActivateTeams+input: OK (wait %dms)", wait)
+        _log.debug("ActivateTeams+input: OK")
     except Exception as e:
         _log.debug("ActivateTeams: %s", e)
 
@@ -340,6 +380,47 @@ def _is_within_schedule() -> bool:
         return current >= start or current < end
 
 
+def _micro_jitter():
+    """Small random mouse moves every 30s between main pulses — keeps idle timers fresh."""
+    global _micro_timer
+    if not _running or _skipping or _outside_schedule:
+        return
+    if platform.system() == "Darwin":
+        try:
+            dx = random.randint(-40, 40)
+            dy = random.randint(-40, 40)
+            if abs(dx) < 10:
+                dx = 10 * (1 if dx >= 0 else -1)
+            if abs(dy) < 10:
+                dy = 10 * (1 if dy >= 0 else -1)
+            _post_hid_event(dx, dy)
+            _log.debug("MicroJitter: IOHIDPost +%d,+%d", dx, dy)
+        except Exception as e:
+            _log.debug("MicroJitter: %s", e)
+    _micro_timer = threading.Timer(
+        random.uniform(MICRO_JITTER_INTERVAL - 5, MICRO_JITTER_INTERVAL + 10),
+        _micro_jitter,
+    )
+    _micro_timer.daemon = True
+    _micro_timer.start()
+
+
+def _start_micro_jitter():
+    global _micro_timer
+    _stop_micro_jitter()
+    interval = random.uniform(MICRO_JITTER_INTERVAL - 5, MICRO_JITTER_INTERVAL + 10)
+    _micro_timer = threading.Timer(interval, _micro_jitter)
+    _micro_timer.daemon = True
+    _micro_timer.start()
+
+
+def _stop_micro_jitter():
+    global _micro_timer
+    if _micro_timer is not None:
+        _micro_timer.cancel()
+        _micro_timer = None
+
+
 def _tick():
     global _timer, _skipping, _next_pulse, _outside_schedule
     with _lock:
@@ -355,6 +436,7 @@ def _tick():
             _outside_schedule = True
             _skipping = False
             _kill_caffeinate()
+            _stop_micro_jitter()
             _log.debug("TICK: outside schedule, sleeping %ds", SCHEDULE_CHECK)
             _next_pulse = time.time() + SCHEDULE_CHECK
             _timer = threading.Timer(SCHEDULE_CHECK, _tick)
@@ -362,6 +444,7 @@ def _tick():
             _outside_schedule = False
             _skipping = True
             _kill_caffeinate()
+            _stop_micro_jitter()
             _log.debug("TICK: AFK skip (idle %.0fs >= %ds)", idle.idle_seconds(), afk_threshold)
             _next_pulse = time.time() + skip_interval
             _timer = threading.Timer(skip_interval, _tick)
@@ -375,6 +458,7 @@ def _tick():
             _poke_caffeinate(interval)
             time.sleep(0.3)
             _verify_idle_reset()
+            _start_micro_jitter()
             _next_pulse = time.time() + interval
             _timer = threading.Timer(interval, _tick)
 
@@ -396,6 +480,7 @@ def stop():
     with _lock:
         _running = False
         _next_pulse = 0
+        _stop_micro_jitter()
         if _timer is not None:
             _timer.cancel()
             _timer = None
